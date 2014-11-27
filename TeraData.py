@@ -15,10 +15,11 @@ class THzTdData():
                 params=kw[1]
             self.filename=filenames
             self.numberOfDataSets=len(self.filename)
+            
      
             for fname in self.filename:
                 self._thzdata_raw.append(self.importfile(fname,params))
-
+            
             self.resetTDData()
         else:
             
@@ -32,16 +33,16 @@ class THzTdData():
             self.numberOfDataSets=len(self.filename)                
             if len(kw)>2:
                 self._thzdata_raw=kw[2]
-                       
+    
+    def getWindowedData(self):
+        pass
+    
     def calcTDData(self,tdDatas):
-        tdData=0
+        #tdDatas should be an array of tdDataarrays
+        meantdData=py.mean(tdDatas,axis=0)
         
-        for thistdData in tdDatas:
-            tdData+=thistdData
-
-        tdData/=len(tdDatas)
         unc=self.calcunc(tdDatas)
-        return py.column_stack((tdData[:,:2],unc))       
+        return py.column_stack((meantdData[:,:2],unc))       
     
     def getPreceedingNoise(self):
         precnoise=[]        
@@ -57,17 +58,12 @@ class THzTdData():
         return precnoise
     
     def calcunc(self,tdDatas):
-        #do it with tdData as np array
-        uncm=0
-        uncm2=0
-        N=len(tdDatas)
-        if N>1:
-            for i in range(N):
-                uncm+=tdDatas[i][:,1]
-                uncm2+=tdDatas[i][:,1]**2        
-            return py.sqrt((uncm2*N-uncm**2)/N/(N-1))    
+        #tdDatas is a np array of tdData measurements
+        if tdDatas.shape[0]==1:
+            uncarray=py.zeros((len(tdDatas[0][:,0]),))
         else:
-            return py.zeros((len(tdDatas[0][:,0]),))
+            uncarray=py.std(py.asarray(tdDatas),axis=0)      
+        return uncarray
        
     def importfile(self,fname,params):
         # if even more sophisticated things are needed, just inherit THzTdData class
@@ -93,8 +89,10 @@ class THzTdData():
         for tdData in tdDatas:
             t=self._removeLinearDrift(tdData)
             tempTDDatas.append(t)
-        
+        #before interpolating to a common time axis, this need to be a list of 
+        #tdData arrays, since they might differ in length
         tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
+        #_bringToCommonTimeAxis returns not any longer a list of TDData array, but a numpy array
         tdDatas=self._shiftData(tempTDDatas)
         return tdDatas
         
@@ -136,7 +134,8 @@ class THzTdData():
                     
                 for i in range(self.numberOfDataSets):
                     tdDatas[i]=self.getInterData(tdDatas[i],commonLENGTH,commonMIN,commonMAX)
-        return tdDatas
+        
+        return py.asarray(tdDatas)
     
     def _shiftData(self,tdDatas):
         #not sure if needed, maybe we want to correct the rawdata by shifting the maxima on top of each other
@@ -365,30 +364,24 @@ class FdData():
         #should be independent of underlying data change!
         precNoise=py.fft(self._tdData.getPreceedingNoise())
         
+        #make sure, that no interpolated or zero padded data is used for calculating the 
+        #freqeuncy uncertainty, not nice style!
         commonTdData=self._tdData._bringToCommonTimeAxis(self._tdData._thzdata_raw)
         noise_real=py.std(precNoise.real)*py.ones(commonTdData[0][:,0].shape)
         noise_imag=py.std(precNoise.imag)*py.ones(commonTdData[0][:,0].shape)
         
+        
         #second calculate variation between measurements
         if self._tdData.numberOfDataSets<=1:
-            repeat_noise_imag2=0
-            repeat_noise_real2=0
+            repeat_noise_imag=0
+            repeat_noise_real=0
         else:
-            (mr,sr)=0,0
-            (mi,si)=0,0
-            N=self._tdData.numberOfDataSets
-            for tdData in commonTdData:
-                a=py.fft(tdData[:,1]) #this is calculated also somewhere esle, could be done more efficient
-                mr+=a.real**2
-                mi+=a.imag**2
-                sr+=a.real
-                si+=a.imag
-                
-            repeat_noise_real2=(mr-sr**2/N)/(N-1)
-            repeat_noise_imag2=(mi-si**2/N)/(N-1)
-        #
+            a=py.fft(commonTdData[:,:,1],axis=1)
+            repeat_noise_real=py.std(a.real,axis=0)
+            repeat_noise_imag=py.std(a.imag,axis=0)
+       
         dfreq=py.fftfreq(len(commonTdData[0][:,0]),commonTdData[0][5,0]-commonTdData[0][4,0])
-        t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real2),py.sqrt(noise_imag**2+repeat_noise_imag2)))
+        t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real**2),py.sqrt(noise_imag**2+repeat_noise_imag**2)))
         return self.cropData(t)
     
     def getSNR(self):
@@ -428,12 +421,12 @@ if __name__=='__main__':
 
     
     myFDData=FdData(myTDData)
-    myFDData.doPlot()
-#    print myFDData.getSNR()    
-#    myFDData.doPlot()    
-#    
-#    myFDData.setFDData(myFDData.getInterpolatedFDData(5e9))
 #    myFDData.doPlot()
+#    print myFDData.getSNR()    
+    myFDData.doPlot()    
+#    
+    myFDData.setFDData(myFDData.getInterpolatedFDData(5e9))
+    myFDData.doPlot()
     
     
     
