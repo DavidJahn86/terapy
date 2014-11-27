@@ -282,7 +282,7 @@ class teralyz():
         f_span=c/2*1/self.l_estimated*1/n #(this should be the length of the oscillation)
         
         calcdata=copy.deepcopy(self.mdata)      
-        calcdata.manipulateFDData(-1,[fmax-f_span*1,fmax+f_span*7])
+        calcdata.manipulateFDData(-1,[fmax-f_span*1,fmax+f_span*4])
         
         H_small=calcdata.H    
         py.figure(33)
@@ -580,20 +580,20 @@ def getparams(name):
 
     mode='Marburg'
     teralyzer=py.zeros((3,3))
-    path='/home/jahndav/Dropbox/THz-Analysis/NEW INRIM Measurements/'
-     
+    path1='/home/jahndav/Dropbox/THz-Analysis/NEW INRIM Measurements/'
+    path2='/home/jahndav/Dropbox/THz-Analysis/'
     if name=='siliInrim':
         
     #    the silicon sample measured at inrim
         thickness=330e-6 
-        samfiles=glob.glob('./silicon/*sam*')
-        reffiles=glob.glob('./silicon/*ref*') 
+        samfiles=glob.glob(path2+'silicon/*sam*')
+        reffiles=glob.glob(path2+'silicon/*ref*') 
         mode='INRIM'
         
     elif name=='siliInrim1':
         thickness=330e-6
-        samfiles=glob.glob('./INRIM1/*sam*.dat')
-        reffiles=glob.glob('./INRIM1/*ref*.dat') 
+        samfiles=glob.glob(path2+'/INRIM1/*sam*.dat')
+        reffiles=glob.glob(path2+'/INRIM1/*ref*.dat') 
         mode='INRIM'
     elif name=='Lactose3Inrim':
        
@@ -617,44 +617,44 @@ def getparams(name):
     elif name=='Teflon3':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=3905e-6
-        samfiles=glob.glob('./MarburgData/*_TeflonI-3*')
-        reffiles=glob.glob('./MarburgData/*ref7*')+glob.glob('./MarburgData/*ref8*')
+        samfiles=glob.glob(path2+'MarburgData/*_TeflonI-3*')
+        reffiles=glob.glob(path2+'MarburgData/*ref7*')+glob.glob(path2+'MarburgData/*ref8*')
     elif name=='Teflon2':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=2117e-6
-        samfiles=glob.glob('./MarburgData/*_TeflonI-2*')
-        reffiles=glob.glob('./MarburgData/*ref6*')+glob.glob('./MarburgData/*ref7*')
+        samfiles=glob.glob(path2+'MarburgData/*_TeflonI-2*')
+        reffiles=glob.glob(path2+'MarburgData/*ref6*')+glob.glob(path2+'MarburgData/*ref7*')
     elif name=='Teflon1':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=2470e-6
-        samfiles=glob.glob('./MarburgData/*_TeflonI-1*')
-        reffiles=glob.glob('./MarburgData/*ref5*')+glob.glob('./MarburgData/*ref6*')
+        samfiles=glob.glob(path2+'MarburgData/*_TeflonI-1*')
+        reffiles=glob.glob(path2+'MarburgData/*ref5*')+glob.glob(path2+'MarburgData/*ref6*')
     elif name=='PP1':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=2039e-6
-        samfiles=glob.glob('./MarburgData/*_PPI-1*')
-        reffiles=glob.glob('./MarburgData/*ref3*')+glob.glob('./MarburgData/*ref4*')
+        samfiles=glob.glob(path2+'MarburgData/*_PPI-1*')
+        reffiles=glob.glob(path2+'MarburgData/*ref3*')+glob.glob(path2+'MarburgData/*ref4*')
     elif name=='PP2':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=1294e-6
-        samfiles=glob.glob('./MarburgData/*_PPI-2*')
-        reffiles=glob.glob('./MarburgData/*ref4*')+glob.glob('./MarburgData/*ref5*')
+        samfiles=glob.glob(path2+'MarburgData/*_PPI-2*')
+        reffiles=glob.glob(path2+'MarburgData/*ref4*')+glob.glob(path2+'MarburgData/*ref5*')
     elif name=='Lactose1':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=2166e-6
-        samfiles=glob.glob('./MarburgData/*_Lact1*')
-        reffiles=glob.glob('./MarburgData/*ref0*')+glob.glob('./MarburgData/*ref1*')
+        samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
+        reffiles=glob.glob(path2+'MarburgData/*ref0*')+glob.glob(path2+'MarburgData/*ref1*')
     elif name=='Lactose2':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=1611e-6
-        samfiles=glob.glob('./MarburgData/*_Lact2*')
-        reffiles=glob.glob('./MarburgData/*ref1*')+glob.glob('./MarburgData/*ref2*')
+        samfiles=glob.glob(path2+'MarburgData/*_Lact2*')
+        reffiles=glob.glob(path2+'MarburgData/*ref1*')+glob.glob(path2+'MarburgData/*ref2*')
     elif name=='Lactose3':
  #   a Teflon sample, flat real(n) and imag(n) expected
         thickness=2376e-6
-        samfiles=glob.glob('./MarburgData/*_Lact3*')
-        reffiles=glob.glob('./MarburgData/*ref2*')+glob.glob('./MarburgData/*ref3*')        
-        teralyzer=py.loadtxt('./MarburgData/L3.txt.csv',delimiter=',',usecols=(0,1,2),skiprows=1)
+        samfiles=glob.glob(path2+'MarburgData/*_Lact3*')
+        reffiles=glob.glob(path2+'MarburgData/*ref2*')+glob.glob(path2+'MarburgData/*ref3*')        
+        teralyzer=py.loadtxt(path2+'MarburgData/L3.txt.csv',delimiter=',',usecols=(0,1,2),skiprows=1)
     elif name=='Ceramic1':
  #   a Teflon sample, flat real(n) and imag(n) expected
         folder='/home/jahndav/Dropbox/laboratory (1)/data-analysis/python_THz/DataSets/ceramic/'
@@ -670,10 +670,10 @@ def getparams(name):
     else:    
  #   the testdata used to write the code  
         thickness=677e-6 
-        samfiles=glob.glob('./rehi/Sample*')
-        reffiles=glob.glob('./rehi/Reference*') 
+        samfiles=glob.glob(path2+'rehi/Sample*')
+        reffiles=glob.glob(path2+'rehi/Reference*') 
         mode='lucastestformat'
-        teralyzer=py.loadtxt('./rehi/Rehi_Teralyzer_OK.txt')
+        teralyzer=py.loadtxt(path2+'rehi/Rehi_Teralyzer_OK.txt')
     
     return thickness,samfiles,reffiles,mode,teralyzer
 
@@ -686,7 +686,7 @@ if __name__=="__main__":
     
 
     #Load Parameters from getparams
-    thickness,samfiles,reffiles,mode,teralyzer=getparams('Lactose3')
+    thickness,samfiles,reffiles,mode,teralyzer=getparams('rehi')
 
     #depending on format use different import module
     if mode=='lucastestformat':

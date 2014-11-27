@@ -44,12 +44,12 @@ sam_fd=TeraData.FdData(samtd)
 
 mdata=Terapy.teradata(ref_fd,sam_fd)
 
-mdata.manipulateFDData(-11e9,[300e9,2.2e12])
+mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 
 myana=Terapy.teralyz(mdata,thickness,20e-6,30)
+#myana.plotInits(mdata.H,thickness)
 myana.doCalculation(args.calcLength,args.noSVMAF,args.silent)
-#
-#myana.plotInits(mdata.H, thickness)
+
 
 if args.outname==None:
     args.outname=myana.getFilenameSuggestion()
@@ -74,12 +74,12 @@ if args.savePlots:
     pylab.legend(('Reference','Sample'))
     pylab.savefig(args.outname + 'PHASE-Frequency-Domain.png')
     pylab.close()
-#    
+    
     mdata.doPlots()
     pylab.savefig(args.outname + 'TransferFunction.png')
     pylab.close()
-
+#
 myana.plotRefractiveIndex(1,1,args.outname)
 myana.saveResults(args.outname)
-
+#
 pylab.show()

@@ -244,7 +244,7 @@ class ImportInrimData(THzTdData):
         THzTdData.__init__(self,filename,Params)
   
     def _filePreferences(self):        
-        time_factor=1   #0
+        time_factor=1  #0
         colon_time=2    #1
         colon_data=3    #2
         decimal_sep='.' #3
@@ -330,7 +330,7 @@ class FdData():
         
         return fmax
         
-    def getUnwrappedPhase(self):
+    def getUnwrappedPhase(self):        
         return self.fdData[:,3]
     
     def calculatefdData(self,tdData):
@@ -340,13 +340,24 @@ class FdData():
     
         fd=py.fft(tdData.tdData[:,1])
         fdabs=abs(fd)
+        
         fdph=abs(py.unwrap(py.angle(fd)))
-        dfreq=py.fftfreq(tdData.num_points,tdData.dt)
+        dfreq=py.fftfreq(tdData.num_points,tdData.dt)                
+        fdph=self.removePhaseOffset(py.column_stack((dfreq,fdph)))
         t=py.column_stack((dfreq,fd,fdabs,fdph))
         t=self.cropData(t,0,unc[-1,0])
         intpunc=interp1d(unc[:,0],unc[:,1:],axis=0)        
         unc=intpunc(t[:,0])
         return py.column_stack((t[:,:4],unc))
+    
+    def removePhaseOffset(self,ph):
+        #cut data to reasonable range:
+        lower=200e9
+        upper=1e12        
+        ph_c=self.cropData(ph,lower,upper)
+        p=py.polyfit(ph_c[:,0],ph_c[:,1],1)
+
+        return ph[:,1]-p[1]
 
     def calculateSTDunc(self):
         #return asarray _tdData
@@ -408,7 +419,7 @@ class FdData():
 if __name__=='__main__':
     import glob
     
-    samfiles=glob.glob('./rehi/Sample*')
+    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sample*')
  
     myTDData=THzTdData(samfiles)
     
