@@ -18,15 +18,18 @@ class teradata():
             minsf,maxsf=self.fdsam.getBandwidth()
             
             self.manipulateFDData(-1,[max(minrf,minsf,140e9),min(maxrf,maxsf)])
+        else:
+            self.H=self.calculateH()
         
-        self.H=self.calculateH()
-        
-    def manipulateFDData(self,fbins,fbnds):
-        if fbins<self.fdref.getfbins() and fbins>0:
-            self.fdref.setFDData(self.fdref.getInterpolatedFDData(fbins))
-        if fbins<self.fdsam.getfbins() and fbins>0:
-            self.fdsam.setFDData(self.fdsam.getInterpolatedFDData(fbins))
-        
+    def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
+        if fbins>0.5e9:
+            if mode=='zeropadd':
+                self.fdref.zeroPadd(fbins)
+                self.fdsam.zeroPadd(fbins)
+            else:
+                self.fdref.setFDData(self.fdref.getInterpolatedFDData(fbins))
+                self.fdsam.setFDData(self.fdsam.getInterpolatedFDData(fbins))
+               
         self.fdref.setFDData(self.fdref.cropData(self.fdref.fdData,fbnds[0],fbnds[1]))        
         self.fdsam.setFDData(self.fdsam.cropData(self.fdsam.fdData,fbnds[0],fbnds[1]))
         self.H=self.calculateH()
@@ -101,7 +104,7 @@ class teradata():
             #take care that abs(H) is always smaller one!
             #try if this increases the data quality!
 #            H_ph=py.unwrap(py.angle(self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]))
-        H_ph=-self.fdsam.getUnwrappedPhase()+self.fdref.getUnwrappedPhase()
+        H_ph=self.fdref.getUnwrappedPhase()-self.fdsam.getUnwrappedPhase()
         H=py.column_stack((self.fdref.fdData[:,0],self.fdsam.fdData[:,1]/self.fdref.fdData[:,1],H_unc_real,H_unc_imag,H_ph))
         return H
       
@@ -121,10 +124,8 @@ class teradata():
         py.ylabel('Transfer Function')
         py.legend(('H_real','H_imag'))
 #        
-#        py.figure(figurenumber+1)
-#        py.plot(freqs,abs(self.H[:,1]))
-#        py.figure(figurenumber+2)
-#        py.plot(freqs,self.H[:,-1])
+        py.figure('H-PHASE-Plot')
+        py.plot(freqs,self.H[:,-1])
 
     def getfreqsGHz(self):
         return self.H[:,0].real*1e-9
@@ -397,8 +398,8 @@ class teralyz():
     def calculateinits(self,H,l):
         #crop the time domain data to the first pulse and apply than the calculation
         origlen=self.mdata.fdref._tdData.getLength() 
-        refdata=THzTdData(self.mdata.fdref._tdData.getFirstPuls(5e-12,10e-12),existing=True)
-        samdata=THzTdData(self.mdata.fdsam._tdData.getFirstPuls(10e-12,5e-12),existing=True)
+        refdata=THzTdData(self.mdata.fdref._tdData.getFirstPuls(10e-12),existing=True)
+        samdata=THzTdData(self.mdata.fdsam._tdData.getFirstPuls(5e-12),existing=True)
         refdata.zeroPaddData(origlen-refdata.getLength())
         samdata.zeroPaddData(origlen-samdata.getLength())
         
@@ -406,6 +407,7 @@ class teralyz():
         firstsam=FdData(samdata)
        
         initTeraData=teradata(firstref,firstsam,disableCut=True)
+        
         oldfreqaxis=self.mdata.H[:,0].real
         intpH=interp1d(initTeraData.H[:,0],initTeraData.H[:,1:],axis=0)
         newH=intpH(oldfreqaxis.real)
@@ -683,7 +685,7 @@ if __name__=="__main__":
     
 
     #Load Parameters from getparams
-    thickness,samfiles,reffiles,mode,teralyzer=getparams('rehi')
+    thickness,samfiles,reffiles,mode,teralyzer=getparams('siliInrim1')
     #depending on format use different import module
     if mode=='lucastestformat':
         reftd=THzTdData(reffiles)
@@ -703,17 +705,21 @@ if __name__=="__main__":
     ref_fd=FdData(reftd)
     sam_fd=FdData(samtd)
 
-#    ref_fd.doPlot()
-#    sam_fd.doPlot()
+    ref_fd.doPlot()
+    sam_fd.doPlot()
 ##    #initialize the mdata object (H,and so on)
-    mdata=teradata(ref_fd,sam_fd)
-
+#    mdata=teradata(ref_fd,sam_fd)
+#
+#    mdata.doPlots()
+    
+#    mdata.manipulateFDData(5e9,[200e9,2.2e12],mode='zeropadd')
 #    mdata.doPlots()
 #    mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 #    l3=mdata.findAbsorptionLines()
  
-    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
-    myana.plotInits(mdata.H,thickness)
+#    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
+#    myana.calculateinits(mdata.H,thickness)
+#    myana.plotInits(mdata.H,thickness)
 #    myana.doCalculation()
 #    myana.plotRefractiveIndex(1,1)
 #    myana.saveResults()

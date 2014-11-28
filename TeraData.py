@@ -113,15 +113,11 @@ class THzTdData():
                 print "Warning: Data seems to be corrupted. \n" +\
                 "The length of acquired data of repeated measurements differs by \n" + \
                     str(max(all_lengthes)-min(all_lengthes)) + ' datapoints'
-        #interpolation does no harm, even if everything is consistent (no interpolation in this case)
-        commonMIN=min(tdDatas[0][:,0])
-        commonMAX=max(tdDatas[0][:,0])
-        commonLENGTH=len(tdDatas[0][:,0])
         
-        for i in range(1,self.numberOfDataSets):
-            commonMIN=max(commonMIN,min(tdDatas[i][:,0]))
-            commonMAX=min(commonMAX,max(tdDatas[i][:,0]))
-            commonLENGTH=min(commonLENGTH,len(tdDatas[i][:,0]))
+        #interpolation does no harm, even if everything is consistent (no interpolation in this case)
+        commonMIN=max([thistdData[:,0].min() for thistdData in tdDatas])
+        commonMAX=min([thistdData[:,0].max() for thistdData in tdDatas])
+        commonLENGTH=min([thistdData[:,0].shape[0] for thistdData in tdDatas])
             
         for i in range(self.numberOfDataSets):
             tdDatas[i]=self.getInterData(tdDatas[i],commonLENGTH,commonMIN,commonMAX)
@@ -186,12 +182,13 @@ class THzTdData():
             
             self.setTDData(py.column_stack((longtime,longdata,longunc)))
             
-    def getFirstPuls(self,before,after):
+    def getFirstPuls(self,after):
         tcenter=self.getPeakPosition()
-        #assume width of the pulse to be not more than 10ps!
-        tmin=tcenter-before
+        #assume width of the pulse to be not more than 10ps!, further crop always from
+        #the beginning of the time data, in order to avoid phase problems
+        
         tmax=tcenter+after
-        return self.getShorterData(self.tdData,tmin,tmax)
+        return self.getShorterData(self.tdData,self.tdData[0,0],tmax)
     
     def getShorterData(self,tdData,tmin,tmax):
         ix=py.all([tdData[:,0]>=tmin,tdData[:,0]<tmax],axis=0)
@@ -251,7 +248,7 @@ class ImportInrimData(THzTdData):
         THzTdData.__init__(self,filename,Params)
   
     def _filePreferences(self):        
-        time_factor=1  #0
+        time_factor=2    #0
         colon_time=2    #1
         colon_data=3    #2
         decimal_sep='.' #3
@@ -419,7 +416,7 @@ class FdData():
 if __name__=='__main__':
     import glob
     
-    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sample*')
+    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Ref*')
  
     myTDData=THzTdData(samfiles)
 #    myTDData.doTdPlot()
@@ -427,8 +424,10 @@ if __name__=='__main__':
 #    myTDData.doPlotWithunc()
 
     
-#    myFDData=FdData(myTDData)
-#    myFDData.doPlot()
+    myFDData=FdData(myTDData)
+    myFDData.doPlot()
+    myFDData.zeroPadd(5e9)
+    myFDData.doPlot()
 #    print myFDData.getSNR()    
 #    myFDData.doPlot()    
 #    
