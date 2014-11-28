@@ -10,13 +10,15 @@ from TeraData import *
 
 class teradata():
  
-    def __init__(self,FDref,FDsam):
+    def __init__(self,FDref,FDsam,disableCut=False):
         self.fdref=FDref
         self.fdsam=FDsam
-        minrf,maxrf=self.fdref.getBandwidth()
-        minsf,maxsf=self.fdsam.getBandwidth()
+        if not disableCut:
+            minrf,maxrf=self.fdref.getBandwidth()
+            minsf,maxsf=self.fdsam.getBandwidth()
+            
+            self.manipulateFDData(-1,[max(minrf,minsf,140e9),min(maxrf,maxsf)])
         
-#        self.manipulateFDData(-1,[max(minrf,minsf,140e9),min(maxrf,maxsf)])
         self.H=self.calculateH()
         
     def manipulateFDData(self,fbins,fbnds):
@@ -76,7 +78,7 @@ class teradata():
         #naive approach: Interpolate on time axis basis, better: Interpolate in Frequency space!
         cmin=max(min(tdref.tdData[:,0]),min(tdsam.tdData[:,0]))
         cmax=min(max(tdref.tdData[:,0]),max(tdsam.tdData[:,0]))
-        clen=min(tdref.getlength(),tdsam.getlength())
+        clen=min(tdref.getLength(),tdsam.getLength())
         
         #safe also old bnds        
         minrf,maxrf=self.fdref.getBandwidth()
@@ -125,7 +127,7 @@ class teradata():
 #        py.plot(freqs,self.H[:,-1])
 
     def getfreqsGHz(self):
-        return self.H[:,0].real*1e9
+        return self.H[:,0].real*1e-9
         
     def findAbsorptionLines(self):
         
@@ -198,10 +200,12 @@ class teradata():
         return df
         
     def estimateLDavid(self):
-        rdata=self.getcroppedData(self.H,200e9,2e12)
-        #calculate phase change        
-        kappa=abs(py.mean(py.diff(rdata[:,-1]))/(self.H[1,0]-self.H[0,0]))
-        
+        rdata=self.getcroppedData(self.H,200e9,1e12)
+        #calculate phase change
+        p=py.polyfit(rdata[:,0].real,rdata[:,-1].real,1)        
+        kappa=abs(p[0])
+#        py.figure()
+#        py.plot(rdata[:,0],rdata[:,-1])
         df=self.getEtalonSpacing()
         #assume air around
         n=1.0/(1.00027-kappa*df/py.pi)
@@ -392,29 +396,22 @@ class teralyz():
       
     def calculateinits(self,H,l):
         #crop the time domain data to the first pulse and apply than the calculation
-#        refdata=THzTdData(tdData=self.mdata.fdref._tdData.getFirstPuls(5e-12,10e-12))
-#        samdata=THzTdData(tdData=self.mdata.fdsam._tdData.getFirstPuls(10e-12,5e-12))
-#        refdata.zeroPaddData(2000)
-#        samdata.zeroPaddData(2000)
+        origlen=self.mdata.fdref._tdData.getLength() 
+        refdata=THzTdData(self.mdata.fdref._tdData.getFirstPuls(5e-12,10e-12),existing=True)
+        samdata=THzTdData(self.mdata.fdsam._tdData.getFirstPuls(10e-12,5e-12),existing=True)
+        refdata.zeroPaddData(origlen-refdata.getLength())
+        samdata.zeroPaddData(origlen-samdata.getLength())
         
-#        firstref=FdData(refdata)
-#        firstsam=FdData(samdata)
-#        
-#        initTeraData=teradata(firstref,firstsam)
-#        oldfreqaxis=H[:,0]
-#      
-#        intpH=interp1d(initTeraData.H[:,0],initTeraData.H[:,1:],axis=0)
-#        newH=intpH(oldfreqaxis)
-#        n=self.n_0-newH[:,3]/(2*py.pi*oldfreqaxis*l)*c
-#        alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(abs(newH[:,0])*(n+1)**2/(4*n))
-####  
-        #why is this NOT working
-        tester=0
-        #naive approach:
-        n=self.n_0-(H[:,4]+py.pi*tester)/(2*py.pi*H[:,0].real*l)*c
-        
-        alpha=-c/(2*py.pi*H[:,0]*l)*py.log(abs(H[:,1])*(n+1)**2/(4*n))
-##  
+        firstref=FdData(refdata)
+        firstsam=FdData(samdata)
+       
+        initTeraData=teradata(firstref,firstsam,disableCut=True)
+        oldfreqaxis=self.mdata.H[:,0].real
+        intpH=interp1d(initTeraData.H[:,0],initTeraData.H[:,1:],axis=0)
+        newH=intpH(oldfreqaxis.real)
+        n=self.n_0-newH[:,3]/(2*py.pi*oldfreqaxis*l)*c
+        alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(abs(newH[:,0])*(n+1)**2/(4*n))
+
         return n.real,alpha.real
     
     def plotInits(self,H,l,figurenumber=200):
@@ -687,7 +684,6 @@ if __name__=="__main__":
 
     #Load Parameters from getparams
     thickness,samfiles,reffiles,mode,teralyzer=getparams('rehi')
-
     #depending on format use different import module
     if mode=='lucastestformat':
         reftd=THzTdData(reffiles)
@@ -707,15 +703,17 @@ if __name__=="__main__":
     ref_fd=FdData(reftd)
     sam_fd=FdData(samtd)
 
-    ref_fd.doPlot()
-    sam_fd.doPlot()
+#    ref_fd.doPlot()
+#    sam_fd.doPlot()
 ##    #initialize the mdata object (H,and so on)
-#    mdata=teradata(ref_fd,sam_fd)
+    mdata=teradata(ref_fd,sam_fd)
+
 #    mdata.doPlots()
 #    mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 #    l3=mdata.findAbsorptionLines()
  
-#    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
+    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
+    myana.plotInits(mdata.H,thickness)
 #    myana.doCalculation()
 #    myana.plotRefractiveIndex(1,1)
 #    myana.saveResults()

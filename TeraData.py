@@ -24,11 +24,11 @@ class THzTdData():
         else:
             
             self.setTDData(kw[0])
-            self._thzdata_raw=self.tdData            
+            self._thzdata_raw=[self.tdData]            
             if len(kw)>1:
                 self.filename=kw[1]
             else:
-                self.filename='None'
+                self.filename=['None']
             
             self.numberOfDataSets=len(self.filename)                
             if len(kw)>2:
@@ -157,7 +157,7 @@ class THzTdData():
         return py.column_stack((timeaxis,longerData))
 #            return py.transpose(py.asarray([timeaxis,longerData]))
     
-    def getlength(self):
+    def getLength(self):
         return len(self.tdData[:,0])
         
     def getfilename(self):
@@ -209,7 +209,7 @@ class THzTdData():
     def getWindowedData(self,windowlength):
         N=int(windowlength/self.dt)
         w=py.blackman(N*2)
-        w=py.asarray(py.hstack((w[0:N],py.ones((self.getlength()-N*2),),w[N:])))
+        w=py.asarray(py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:])))
         windowedData=self.tdData
         windowedData[:,1]*=w        
         return windowedData
@@ -309,7 +309,7 @@ class FdData():
 
     def zeroPadd(self,fbins):
         spac=1/self._tdData.dt/fbins
-        actlen=self._tdData.getlength()
+        actlen=self._tdData.getLength()
         nozeros=py.ceil(spac-actlen)
         self._tdData.zeroPaddData(nozeros)
         #leave the old bnds in place
@@ -363,7 +363,6 @@ class FdData():
         upper=1e12        
         ph_c=self.cropData(ph,lower,upper)
         p=py.polyfit(ph_c[:,0],ph_c[:,1],1)
-
         return ph[:,1]-p[1]
 
     def calculateSTDunc(self):
