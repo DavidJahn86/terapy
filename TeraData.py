@@ -34,9 +34,6 @@ class THzTdData():
             if len(kw)>2:
                 self._thzdata_raw=kw[2]
     
-    def getWindowedData(self):
-        pass
-    
     def calcTDData(self,tdDatas):
         #tdDatas should be an array of tdDataarrays
         meantdData=py.mean(tdDatas,axis=0)
@@ -60,7 +57,7 @@ class THzTdData():
     def calcunc(self,tdDatas):
         #tdDatas is a np array of tdData measurements
         if tdDatas.shape[0]==1:
-            uncarray=py.zeros((len(tdDatas[0][:,0]),))
+            uncarray=py.zeros((len(tdDatas[0,:,0]),))
         else:
             uncarray=py.std(py.asarray(tdDatas),axis=0)      
         return uncarray
@@ -91,10 +88,10 @@ class THzTdData():
             tempTDDatas.append(t)
         #before interpolating to a common time axis, this need to be a list of 
         #tdData arrays, since they might differ in length
+        #first shift than interpolate 
+        tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
         tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
-        #_bringToCommonTimeAxis returns not any longer a list of TDData array, but a numpy array
-        tdDatas=self._shiftData(tempTDDatas)
-        return tdDatas
+        return tempTDDatas
         
     def _bringToCommonTimeAxis(self,tdDatas):
         #What can happen: 
@@ -102,46 +99,49 @@ class THzTdData():
         #   => no equal frequency bins
         #b) time positions might not be equal
             
-        miss_points_max=10
-        #load all data in list
-        
+        miss_points_max=10    
         #check for missing datapoints, allowing 
         #not more than miss_points_max points to miss 
-        #insert either points that are missed inbetween the
-        #array and also those which are missing at start and end of the array
         all_lengthes=[]
         for thisdata in tdDatas:
             all_lengthes.append(len(thisdata[:,0]))
         
+        #do it always, just print a warning, if miss_points_max is exceeded
         if min(all_lengthes)!=max(all_lengthes):
-            print "Data not consistent, try to fix"
+            print "Datalength of suceeding measurements not consistent, try to fix"
             if max(all_lengthes)-min(all_lengthes)>miss_points_max:
-                print "Data seems to be corrupted. \n" +\
-                "The length of acquired data of repeated measurements differs by more than\n" + \
-                    str(max(all_lengthes)-min(all_lengthes))
-            else:
-                #different cases: 1) missing datapoints at beginning or end:
-                    #-> solve this by appending some points at the beginning, or end 
-                    # or missing datapoints inbetween
-                commonMIN=min(tdDatas[0][:,0])
-                commonMAX=max(tdDatas[0][:,0])
-                commonLENGTH=len(tdDatas[0][:,0])
-                
-                for i in range(1,self.numberOfDataSets):
-                    commonMIN=max(commonMIN,min(tdDatas[i][:,0]))
-                    commonMAX=min(commonMAX,max(tdDatas[i][:,0]))
-                    commonLENGTH=min(commonLENGTH,len(tdDatas[i][:,0]))
-                    
-                for i in range(self.numberOfDataSets):
-                    tdDatas[i]=self.getInterData(tdDatas[i],commonLENGTH,commonMIN,commonMAX)
+                print "Warning: Data seems to be corrupted. \n" +\
+                "The length of acquired data of repeated measurements differs by \n" + \
+                    str(max(all_lengthes)-min(all_lengthes)) + ' datapoints'
+        #interpolation does no harm, even if everything is consistent (no interpolation in this case)
+        commonMIN=min(tdDatas[0][:,0])
+        commonMAX=max(tdDatas[0][:,0])
+        commonLENGTH=len(tdDatas[0][:,0])
+        
+        for i in range(1,self.numberOfDataSets):
+            commonMIN=max(commonMIN,min(tdDatas[i][:,0]))
+            commonMAX=min(commonMAX,max(tdDatas[i][:,0]))
+            commonLENGTH=min(commonLENGTH,len(tdDatas[i][:,0]))
+            
+        for i in range(self.numberOfDataSets):
+            tdDatas[i]=self.getInterData(tdDatas[i],commonLENGTH,commonMIN,commonMAX)
+            tdDatas[i][:,0]-=commonMIN
         
         return py.asarray(tdDatas)
     
-    def _shiftData(self,tdDatas):
+    def _removeTimeShift(self,tdDatas):
         #not sure if needed, maybe we want to correct the rawdata by shifting the maxima on top of each other
-        
-        #implement little later
-        return tdDatas
+        #the indices of the maxima        
+        peak_pos=[]
+        for tdData in tdDatas:
+            time_max_raw=tdData[py.argmax(tdData[:,1]),0]
+            thisPeakData=self.getShorterData(tdData,time_max_raw-0.5e-12,time_max_raw+0.5e-12)
+            thisPeakData=self.getInterData(thisPeakData,len(thisPeakData[:,0])*20,thisPeakData[0,0],thisPeakData[-1,0],'cubic')
+            peak_pos.append(thisPeakData[py.argmax(thisPeakData[:,1]),0])
+            
+        for i in range(len(tdDatas)):
+            tdDatas[i][:,0]-=peak_pos[i]
+        return tdDatas,py.asarray(peak_pos).std()
   
     def _removeLinearDrift(self,tdData):
         #not yet implemented
@@ -149,8 +149,9 @@ class THzTdData():
         tdData[:,1]=py.detrend(signal,key='linear')
         return tdData
     
-    def getInterData(self,tdData,desiredLength,mint,maxt):
-        intpdata=interp1d(tdData[:,0],tdData[:,1:],axis=0)
+    def getInterData(self,tdData,desiredLength,mint,maxt,tkind='linear'):
+        #use cubic interpolation only, if you know, that the data is not too no
+        intpdata=interp1d(tdData[:,0],tdData[:,1:],axis=0,kind=tkind)
         timeaxis=py.linspace(mint,maxt,desiredLength)
         longerData=intpdata(timeaxis)
         return py.column_stack((timeaxis,longerData))
@@ -190,11 +191,11 @@ class THzTdData():
         #assume width of the pulse to be not more than 10ps!
         tmin=tcenter-before
         tmax=tcenter+after
-        return self.getShorterData(tmin,tmax)
+        return self.getShorterData(self.tdData,tmin,tmax)
     
-    def getShorterData(self,tmin,tmax):
-        ix=py.all([self.tdData[:,0]>=tmin,self.tdData[:,0]<tmax],axis=0)
-        return self.tdData[ix,:]
+    def getShorterData(self,tdData,tmin,tmax):
+        ix=py.all([tdData[:,0]>=tmin,tdData[:,0]<tmax],axis=0)
+        return tdData[ix,:]
     
     
     def setTDData(self,tdData):
@@ -204,8 +205,15 @@ class THzTdData():
         self.dt=abs(py.mean(tdData[10:20,0]-tdData[9:19,0]))       
 #        self.dt=(tdData[-1,0]-tdData[0,0])/len(tdData[:,0])
         self.num_points=len(tdData[:,0])
-        
     
+    def getWindowedData(self,windowlength):
+        N=int(windowlength/self.dt)
+        w=py.blackman(N*2)
+        w=py.asarray(py.hstack((w[0:N],py.ones((self.getlength()-N*2),),w[N:])))
+        windowedData=self.tdData
+        windowedData[:,1]*=w        
+        return windowedData
+        
     def resetTDData(self):
         tempdata=self.calcTDData(self._processRawData(self._thzdata_raw))
         self.setTDData(tempdata)
@@ -415,18 +423,18 @@ if __name__=='__main__':
     samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sample*')
  
     myTDData=THzTdData(samfiles)
-    
 #    myTDData.doTdPlot()
+    
 #    myTDData.doPlotWithunc()
 
     
-    myFDData=FdData(myTDData)
+#    myFDData=FdData(myTDData)
 #    myFDData.doPlot()
 #    print myFDData.getSNR()    
-    myFDData.doPlot()    
+#    myFDData.doPlot()    
 #    
-    myFDData.setFDData(myFDData.getInterpolatedFDData(5e9))
-    myFDData.doPlot()
+#    myFDData.setFDData(myFDData.getInterpolatedFDData(5e9))
+#    myFDData.doPlot()
     
     
     
