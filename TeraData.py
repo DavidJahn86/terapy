@@ -41,17 +41,36 @@ class THzTdData():
         unc=self.calcunc(tdDatas)
         return py.column_stack((meantdData[:,:2],unc))       
     
-    def getPreceedingNoise(self):
-        precnoise=[]        
-        for i in range(self.numberOfDataSets):
-            #overthink this function!
-            ratio=2
-            ix_max=py.argmax(self._thzdata_raw[i][:,1])
-            ix_min=py.argmin(self._thzdata_raw[i][:,1])
-            earlier=min(ix_max,ix_min)
-            #take only the first nts part            
-            ix_start=int(earlier/ratio)
-            precnoise=py.concatenate((precnoise, self._thzdata_raw[i][:ix_start,1]))
+    def getPreceedingNoise(self,timePreceedingSignal=-1):
+        precnoise=[]
+        
+        #check for reasonable input
+        #peak position in raw data is always at origin!
+        nearestdistancetopeak=2.5e-12
+        if min(self._thzdata_raw[0][:,0])+timePreceedingSignal>-nearestdistancetopeak:
+            timePreceedingSignal=-min(self._thzdata_raw[0][:,0])-nearestdistancetopeak
+            print "Time Interval of preceeding noise to long, reset done"
+            #dont use user input if higher than peak
+       #really neccessary for each dataset, or would it suffice to take the first?
+        for i in range(self.numberOfDataSets):       
+            starttime=min(self._thzdata_raw[i][:,0])
+            if timePreceedingSignal==-1:
+              #determine length automatically            
+
+                ratio=2
+                ix_max=py.argmax(self._thzdata_raw[i][:,1])
+                ix_min=py.argmin(self._thzdata_raw[i][:,1])
+                earlier=min(ix_max,ix_min)
+                #take only the first nts part            
+                endtime=self._thzdata_raw[i][int(earlier/ratio),0]
+            else:
+                    
+                endtime=starttime+timePreceedingSignal
+            
+            noise=self.getShorterData(self._thzdata_raw[i],starttime,endtime)
+            noise=py.detrend(noise[:,1])
+#            noise=noise[:,1]
+            precnoise=py.concatenate((precnoise,noise))
         return precnoise
     
     def calcunc(self,tdDatas):
@@ -419,15 +438,16 @@ if __name__=='__main__':
     samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Ref*')
  
     myTDData=THzTdData(samfiles)
+
 #    myTDData.doTdPlot()
     
 #    myTDData.doPlotWithunc()
 
     
-    myFDData=FdData(myTDData)
-    myFDData.doPlot()
-    myFDData.zeroPadd(5e9)
-    myFDData.doPlot()
+#    myFDData=FdData(myTDData)
+#    myFDData.doPlot()
+#    myFDData.zeroPadd(5e9)
+#    myFDData.doPlot()
 #    print myFDData.getSNR()    
 #    myFDData.doPlot()    
 #    
