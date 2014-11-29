@@ -421,8 +421,7 @@ class FdData():
         absdata=-20*py.log10(self.fdData[:,2]/max(self.fdData[:,2]))
         ix=SNR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
         tfr=self.fdData[ix,0]
-        py.plot(self.getfreqs(),-absdata)
-        py.plot(tfr,-absdata[ix],'+')
+
         return min(tfr),max(tfr)
 
     def doPlot(self):

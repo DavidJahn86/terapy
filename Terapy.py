@@ -712,8 +712,8 @@ if __name__=="__main__":
 #
 #    mdata.doPlots()
     
-#    mdata.manipulateFDData(5e9,[200e9,2.2e12],mode='zeropadd')
-#    mdata.doPlots()
+    mdata.manipulateFDData(5e9,[200e9,2.2e12],mode='zeropadd')
+    mdata.doPlots()
 #    mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 #    l3=mdata.findAbsorptionLines()
  
