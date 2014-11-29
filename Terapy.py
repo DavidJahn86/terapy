@@ -64,29 +64,46 @@ class teradata():
                 
         return py.sqrt(H_unc_real2),py.sqrt(H_unc_imag2)
     
-    def checkDataIntegrity(self):
+    def _checkDataIntegrity(self):
         tdrefData=self.fdref.getassTDData()
         tdsamData=self.fdsam.getassTDData()
-        if tdrefData.getLength()!=tdsamData.getLength():
-            return 0
-            
+
         #begin and end should differ not more than 1 as
-        if abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-18:
-            return 0
+        if abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>5e-15:
+            return 'td-Problem-phase'
+
+        if tdrefData.getLength()!=tdsamData.getLength():
+            return 'td-Problem-len'
         
-        if abs(tdrefData.tdData[-1,0]-tdsamData.tdData[-1,0])>1e-18:
-            return 0
-         #else return true      
-        return 1     
+        if abs(tdrefData.tdData[-1,0]-tdsamData.tdData[-1,0])>1e-18 or\
+            abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-18:
+            return 'td-Problem-interval'
+        
+        if len(self.fdref.fdData[:,1])!= len(self.fdsam.fdaAta[:,1]):
+            return 'fd-Problem-len'
+        
+        if not all(self.fdref.fdData[:,0]-self.fdsam.fdData[:,0]<1e6):
+            return 'fd-Problem-axis'
+         #else return       
+        return 'good'
       
-    def interpolateData(self):
+    def interpolateData(self,prob_str):
         #take care, this actually manipulates the real underlying data!
         #maybe consider to do a deepcopy!
     
         tdref=self.fdref.getassTDData()
         tdsam=self.fdsam.getassTDData()
-        
-        #naive approach: Interpolate on time axis basis, better: Interpolate in Frequency space!
+  
+        #if the absolute time, at which one of the two measurements starts differs significantly
+        #from the other, we should put out a warning, and put trailing zeros
+        #after that we are ready for interpolating the data
+        if prob_str=='td-Problem-phase':
+            t_start_ref=tdref.tdData[0,0]
+            t_start_sam=tdsam.tdData[0,0]
+            N=int((t_start_sam-t_start_ref)/tdsam.dt)
+            tdsam.zeroPaddData(N,'zero','start')
+      
+        #(max min notation for readability?
         cmin=max(min(tdref.tdData[:,0]),min(tdsam.tdData[:,0]))
         cmax=min(max(tdref.tdData[:,0]),max(tdsam.tdData[:,0]))
         clen=min(tdref.getLength(),tdsam.getLength())
@@ -99,13 +116,13 @@ class teradata():
         tdsamnew=THzTdData(tdsam.getInterData(tdsam.tdData,clen,cmin,cmax),tdsam.getfilename(),tdsam._thzdata_raw,existing=True)
         
         self.fdref=FdData(tdrefnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])
-        self.fdsam=FdData(tdsamnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])
+        self.fdsam=FdData(tdsamnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])  
 
     def calculateH(self):
-
-        if not self.checkDataIntegrity():
+        prob_str=self._checkDataIntegrity()
+        if not prob_str=='good':
             print "interpolation required"
-            self.interpolateData()
+            self.interpolateData(prob_str)
         
         H_unc_real,H_unc_imag=self.calculateConfidenceInterval()
             #take care that abs(H) is always smaller one!
@@ -707,8 +724,8 @@ if __name__=="__main__":
 
 #    reftd.doPlotWithunc()
 #    samtd.doPlotWithunc()
-
-#    #initialize the fd_data objects        
+#    #initialize the fd_data objects
+            
     ref_fd=FdData(reftd)
     sam_fd=FdData(samtd)
 #    sam_fd.zeroPadd(5e9)

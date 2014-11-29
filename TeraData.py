@@ -156,7 +156,7 @@ class THzTdData():
         peak_pos=py.asarray(peak_pos)
         mp=py.mean(peak_pos)
         for i in range(len(tdDatas)):
-            tdDatas[i][:,0]-=(peak_pos-mp)
+            tdDatas[i][:,0]-=(peak_pos[i]-mp)
         return tdDatas,py.std(peak_pos)
   
     def _removeLinearDrift(self,tdData):
@@ -186,21 +186,30 @@ class THzTdData():
     def getPeakPosition(self):
         return self.tdData[py.argmax(self.tdData[:,1]),0]
     
-    def zeroPaddData(self,desiredLength,paddmode='zero'):    
-        if desiredLength>0:
-            desiredLength=int(desiredLength)
-            if paddmode=='gaussian':
-                paddvec=py.normal(0,py.std(self.getPreceedingNoise())*0.05,desiredLength)
-                                
-            else:
-                paddvec=py.ones((desiredLength,))*py.mean(self.tdData[-20:,1])
+    def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
+        if desiredLength<0:
+            return 0
             
+        desiredLength=int(desiredLength)
+        
+        if paddmode=='gaussian':
+            paddvec=py.normal(0,py.std(self.getPreceedingNoise())*0.05,desiredLength)
+                                
+        else:
+            paddvec=py.ones((desiredLength,))*py.mean(self.tdData[-20:,1])
+
+        if where=='end':
             uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[-20:,2])
             longunc=py.append(self.tdData[:,2],uncpadd)
             longdata=py.append(self.tdData[:,1],paddvec)
             longtime=py.append(self.tdData[:,0],py.linspace(self.tdData[-1,0],self.tdData[-1,0]+desiredLength*self.dt,desiredLength))
-            
-            self.setTDData(py.column_stack((longtime,longdata,longunc)))
+        else:
+            uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[:20,2])
+            longunc=py.append(uncpadd,self.tdData[:,2])
+            longdata=py.append(paddvec,self.tdData[:,1])
+            timepadd=py.linspace(self.tdData[0,0]-(desiredLength+1)*self.dt,self.tdData[0,0],desiredLength)
+            longtime=py.append(timepadd,self.tdData[:,0])
+        self.setTDData(py.column_stack((longtime,longdata,longunc)))
             
     def getFirstPuls(self,after):
         tcenter=self.getPeakPosition()
