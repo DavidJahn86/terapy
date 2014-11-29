@@ -222,8 +222,8 @@ class THzTdData():
 #        self.dt=(tdData[-1,0]-tdData[0,0])/len(tdData[:,0])
         self.num_points=len(tdData[:,0])
     
-    def getWindowedData(self,windowlength):
-        N=int(windowlength/self.dt)
+    def getWindowedData(self,windowlength_time):
+        N=int(windowlength_time/self.dt)
         w=py.blackman(N*2)
         w=py.asarray(py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:])))
         windowedData=self.tdData
@@ -413,13 +413,16 @@ class FdData():
         signalmax=self.cropData(self.fdData,maxfreq-4*self.getfbins(),maxfreq+4*self.getfbins())
         return 20*py.log10(py.mean(signalmax[:,2])/noiselevel)        
         
-    def getBandwidth(self):
+    def getBandwidth(self,dbDistancetoNoise=15):
         #this function should return the lowest trustable and highest trustable frequency, 
         # along with the resulting bandwidth
         SNR=self.getSNR()
+        
         absdata=-20*py.log10(self.fdData[:,2]/max(self.fdData[:,2]))
-        ix=SNR-10>absdata #dangerous, due to sidelobes, there might be some high freq component!
+        ix=SNR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
         tfr=self.fdData[ix,0]
+        py.plot(self.getfreqs(),-absdata)
+        py.plot(tfr,-absdata[ix],'+')
         return min(tfr),max(tfr)
 
     def doPlot(self):
@@ -435,7 +438,7 @@ class FdData():
 if __name__=='__main__':
     import glob
     
-    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Ref*')
+    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sam*')
  
     myTDData=THzTdData(samfiles)
 
@@ -444,7 +447,9 @@ if __name__=='__main__':
 #    myTDData.doPlotWithunc()
 
     
-#    myFDData=FdData(myTDData)
+    myFDData=FdData(myTDData)
+    myFDData.getBandwidth()
+#    py.plot(myFDData.getfreqs(),myFDData.fdData[:,2])
 #    myFDData.doPlot()
 #    myFDData.zeroPadd(5e9)
 #    myFDData.doPlot()
