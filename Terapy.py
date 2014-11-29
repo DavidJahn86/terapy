@@ -65,11 +65,19 @@ class teradata():
         return py.sqrt(H_unc_real2),py.sqrt(H_unc_imag2)
     
     def checkDataIntegrity(self):
-        if len(self.fdref.getfreqs())!=len(self.fdsam.getfreqs()) or\
-            all(self.fdref.getfreqs()-self.fdsam.getfreqs()>0.1e9):
+        tdrefData=self.fdref.getassTDData()
+        tdsamData=self.fdsam.getassTDData()
+        if tdrefData.getLength()!=tdsamData.getLength():
             return 0
-        else:
-            return 1         
+            
+        #begin and end should differ not more than 1 as
+        if abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-18:
+            return 0
+        
+        if abs(tdrefData.tdData[-1,0]-tdsamData.tdData[-1,0])>1e-18:
+            return 0
+         #else return true      
+        return 1     
       
     def interpolateData(self):
         #take care, this actually manipulates the real underlying data!
@@ -89,7 +97,6 @@ class teradata():
         
         tdrefnew=THzTdData(tdref.getInterData(tdref.tdData,clen,cmin,cmax),tdref.getfilename(),tdref._thzdata_raw,existing=True)
         tdsamnew=THzTdData(tdsam.getInterData(tdsam.tdData,clen,cmin,cmax),tdsam.getfilename(),tdsam._thzdata_raw,existing=True)
-      
         
         self.fdref=FdData(tdrefnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])
         self.fdsam=FdData(tdsamnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])
@@ -704,22 +711,24 @@ if __name__=="__main__":
 #    #initialize the fd_data objects        
     ref_fd=FdData(reftd)
     sam_fd=FdData(samtd)
-
-#    ref_fd.doPlot()
+#    sam_fd.zeroPadd(5e9)
+    
+##    ref_fd.doPlot()
 #    sam_fd.doPlot()
 ##    #initialize the mdata object (H,and so on)
     mdata=teradata(ref_fd,sam_fd)
 #
 #    mdata.doPlots()
     
-    mdata.manipulateFDData(5e9,[200e9,2.2e12],mode='zeropadd')
-    mdata.doPlots()
+#    mdata.manipulateFDData(6e9,[100e9,3.5e12],mode='zeropadd')
+    mdata.fdsam.doPlot()
+#    mdata.doPlots()
 #    mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 #    l3=mdata.findAbsorptionLines()
  
-    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
-#    myana.calculateinits(mdata.H,thickness)
-    myana.plotInits(mdata.H,thickness)
+#    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
+        
+#    myana.plotInits(mdata.H,thickness)
 #    myana.doCalculation()
 #    myana.plotRefractiveIndex(1,1)
 #    myana.saveResults()

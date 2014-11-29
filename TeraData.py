@@ -140,7 +140,6 @@ class THzTdData():
             
         for i in range(self.numberOfDataSets):
             tdDatas[i]=self.getInterData(tdDatas[i],commonLENGTH,commonMIN,commonMAX)
-            tdDatas[i][:,0]-=commonMIN
         
         return py.asarray(tdDatas)
     
@@ -153,10 +152,12 @@ class THzTdData():
             thisPeakData=self.getShorterData(tdData,time_max_raw-0.5e-12,time_max_raw+0.5e-12)
             thisPeakData=self.getInterData(thisPeakData,len(thisPeakData[:,0])*20,thisPeakData[0,0],thisPeakData[-1,0],'cubic')
             peak_pos.append(thisPeakData[py.argmax(thisPeakData[:,1]),0])
-            
+        
+        peak_pos=py.asarray(peak_pos)
+        mp=py.mean(peak_pos)
         for i in range(len(tdDatas)):
-            tdDatas[i][:,0]-=peak_pos[i]
-        return tdDatas,py.asarray(peak_pos).std()
+            tdDatas[i][:,0]-=(peak_pos-mp)
+        return tdDatas,py.std(peak_pos)
   
     def _removeLinearDrift(self,tdData):
         #not yet implemented
