@@ -685,7 +685,7 @@ if __name__=="__main__":
     
 
     #Load Parameters from getparams
-    thickness,samfiles,reffiles,mode,teralyzer=getparams('siliInrim1')
+    thickness,samfiles,reffiles,mode,teralyzer=getparams('rehi')
     #depending on format use different import module
     if mode=='lucastestformat':
         reftd=THzTdData(reffiles)
@@ -705,10 +705,10 @@ if __name__=="__main__":
     ref_fd=FdData(reftd)
     sam_fd=FdData(samtd)
 
-    ref_fd.doPlot()
-    sam_fd.doPlot()
+#    ref_fd.doPlot()
+#    sam_fd.doPlot()
 ##    #initialize the mdata object (H,and so on)
-#    mdata=teradata(ref_fd,sam_fd)
+    mdata=teradata(ref_fd,sam_fd)
 #
 #    mdata.doPlots()
     
@@ -717,9 +717,9 @@ if __name__=="__main__":
 #    mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 #    l3=mdata.findAbsorptionLines()
  
-#    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
+    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
 #    myana.calculateinits(mdata.H,thickness)
-#    myana.plotInits(mdata.H,thickness)
+    myana.plotInits(mdata.H,thickness)
 #    myana.doCalculation()
 #    myana.plotRefractiveIndex(1,1)
 #    myana.saveResults()

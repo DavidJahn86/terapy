@@ -248,8 +248,8 @@ class ImportInrimData(THzTdData):
         THzTdData.__init__(self,filename,Params)
   
     def _filePreferences(self):        
-        time_factor=2    #0
-        colon_time=2    #1
+        time_factor=1    #0
+        colon_time=2   #1
         colon_data=3    #2
         decimal_sep='.' #3
         skiprows=0      #4
