@@ -42,7 +42,7 @@ sam_fd=TeraData.FdData(samtd)
 
 ##    #initialize the mdata object (H,and so on)
 
-mdata=Terapy.teradata(ref_fd,sam_fd)
+mdata=Terapy.Hmeas(ref_fd,sam_fd)
 
 mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 

@@ -16,19 +16,22 @@ class HMeas(FdData):
         self._tdData=FDsam.getassTDData()
         
         if not disableCut:
+            self.resetfdData()
+        else:
+            self.fdData=self.calculatefdData()
+    
+    def resetfdData(self,fbins=-1,fbnds=[FdData.FMIN,FdData.FMAX]):
             minrf,maxrf=self.fdref.getBandwidth()
             minsf,maxsf=self.fdsam.getBandwidth()
             
-            self.manipulateFDData(-1,[max(minrf,minsf,FdData.FMIN),min(maxrf,maxsf,FdData.FMAX)])
-        else:
-            self.fdData=self.calculatefdData()
+            self.manipulateFDData(fbins,[max(minrf,minsf,FdData.FMIN),min(maxrf,maxsf,FdData.FMAX)])
         
     def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
         #this method provides the means to change the underlying fdData objects and recalculate H
         #if just an interpolated H with fbins is needed, use getInterpolatedFdData from FdData class        
         if fbins>0.5e9:
             if mode=='zeropadd':
-                self.zeroPadd()
+                self.zeroPadd(fbins)
             else:
                 self.fdref.setFDData(self.fdref.getInterpolatedFDData(fbins))
                 self.fdsam.setFDData(self.fdsam.getInterpolatedFDData(fbins))
@@ -43,7 +46,7 @@ class HMeas(FdData):
         self.fdsam.zeroPadd(fbins)
         self.calculatefdData()
     
-    def calculateConfidenceInterval(self):  
+    def calculateSTDunc(self):  
         #x=[a,b,c,d]
         dfda=lambda x: x[2]/(x[2]**2+x[3]**2)
         dfdb=lambda x: x[3]/(x[2]**2+x[3]**2)
@@ -88,7 +91,7 @@ class HMeas(FdData):
             abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-18:
             return 'td-Problem-interval'
         
-        if len(self.fdref.fdData[:,1])!= len(self.fdsam.fdaAta[:,1]):
+        if len(self.fdref.fdData[:,1])!= len(self.fdsam.fdData[:,1]):
             return 'fd-Problem-len'
         
         if not all(self.fdref.fdData[:,0]-self.fdsam.fdData[:,0]<1e6):
@@ -136,7 +139,7 @@ class HMeas(FdData):
             print "interpolation required"
             self.interpolateData(prob_str)
         
-        H_unc_real,H_unc_imag=self.calculateConfidenceInterval()
+        H_unc_real,H_unc_imag=self.calculateSTDunc()
             #take care that abs(H) is always smaller one!
             #try if this increases the data quality!
 #            H_ph=py.unwrap(py.angle(self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]))
@@ -164,7 +167,7 @@ class HMeas(FdData):
         py.plot(freqs,self.fdData[:,2])
         
     def estimateLDavid(self):
-        rdata=self.getcroppedData(self.H,200e9,1e12)
+        rdata=self.getcroppedData(self.fdData,200e9,1e12)
         #calculate phase change
         p=py.polyfit(rdata[:,0].real,rdata[:,3].real,1)        
         kappa=abs(p[0])
@@ -252,7 +255,7 @@ class teralyz():
         calcdata=copy.deepcopy(self.mdata)      
         calcdata.manipulateFDData(-1,[fmax-f_span*1,fmax+f_span*4])
         
-        H_small=calcdata.H    
+        H_small=calcdata.fdData
         py.figure(33)
         t=minimize(self.errorL,self.userthickness,args=((py.asarray(H_small),)),\
         method='Nelder-Mead', options={'xtol':1e-6,'disp': False})#, 'disp': False})
@@ -344,10 +347,10 @@ class teralyz():
         H_r=H_smoothed.real
         H_i=H_smoothed.imag
         f=1
-        lb_r=self.mdata.H[:,1].real-self.mdata.H[:,2]*f
-        lb_i=self.mdata.H[:,1].imag-self.mdata.H[:,3]*f
-        ub_r=self.mdata.H[:,1].real+self.mdata.H[:,2]*f
-        ub_i=self.mdata.H[:,1].imag+self.mdata.H[:,3]*f
+        lb_r=self.mdata.fdData[:,1].real-self.mdata.fdData[:,4]*f
+        lb_i=self.mdata.fdData[:,1].imag-self.mdata.fdData[:,5]*f
+        ub_r=self.mdata.fdData[:,1].real+self.mdata.fdData[:,4]*f
+        ub_i=self.mdata.fdData[:,1].imag+self.mdata.fdData[:,5]*f
         
         #ix=all indices for which after smoothening n H is still inbetwen the bounds        
         ix=py.all([H_r>=lb_r,H_r<ub_r,H_i>=lb_i,H_i<ub_i],axis=0)
@@ -420,15 +423,15 @@ class teralyz():
         print '\033[92m\033[1m' + '  Use Sample Thickness: ' + str(self.l_opt*1e6) + ' micro m ' + '\033[0m'
 
 
-        n=self.calculaten(self.mdata.H,self.l_opt)
+        n=self.calculaten(self.mdata.fdData,self.l_opt)
         n_smoothed=n
         i=0
         
         while i<n_SVMAFS:
-            n_smoothed=self.SVMAF(self.mdata.H[:,0],n_smoothed,self.l_opt)
+            n_smoothed=self.SVMAF(self.mdata.getfreqs(),n_smoothed,self.l_opt)
             i+=1
 
-        self.n=py.column_stack((self.mdata.H[:,0],n,n_smoothed))        
+        self.n=py.column_stack((self.mdata.getfreqs(),n,n_smoothed))        
         
         return self.n
         
@@ -458,15 +461,15 @@ class teralyz():
         
     def saveResults(self,filename=None):
         
-        H_theory=self.H_theory(self.mdata.H[:,0].real,[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
+        H_theory=self.H_theory(self.mdata.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
         #built the variable that should be saved:        
         savetofile=py.column_stack((
         self.n[:,0].real,
         self.n[:,1].real,self.n[:,1].imag, #the real and imaginary part of n
         self.n[:,2].real,self.n[:,2].imag, #the real and imaginary part of the smoothed n
-        self.mdata.H[:,1].real,self.mdata.H[:,1].imag,#H_measured
-        self.mdata.H[:,2].real,self.mdata.H[:,3].real,#uncertainties
-        abs(self.mdata.H[:,1]),self.mdata.H[:,4].real,#absH,ph H measured    
+        self.mdata.fdData[:,1].real,self.mdata.fdData[:,1].imag,#H_measured
+        self.mdata.fdData[:,4].real,self.mdata.fdData[:,5].real,#uncertainties
+        self.mdata.fdData[:,2].real,self.mdata.fdData[:,3].real,#absH,ph H measured    
         H_theory.real,H_theory.imag, #theoretic H
         ))
 
@@ -520,14 +523,14 @@ class teralyz():
     def plotErrorFunction(self,l,freq):
         py.figure()
         resolution=300
-        ix=py.argmin(abs(freq-self.mdata.H[:,0]))
+        ix=py.argmin(abs(freq-self.mdata.getfreqs()))
         n_i=py.linspace(0.0,0.05,int(resolution/2))
         n_r=py.linspace(1,3,resolution)
         N_R,N_I=py.meshgrid(n_r,n_i)
         E_fu=py.zeros((len(n_i),len(n_r)))
         for i in range(len(n_r)):
             for k in range(len(n_i)):
-                E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.mdata.H[ix,:],l)
+                E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.mdata.fdData[ix,:],l)
 #        print E_fu[:,2]
         py.pcolor(N_R,N_I,py.log10(E_fu))
         py.colorbar()
@@ -675,10 +678,10 @@ if __name__=="__main__":
     mdata=HMeas(ref_fd,sam_fd)
     mdata.doPlot()
 #    print mdata.getSNR()
-    print mdata.getmaxfreq()
+#    print mdata.getmaxfreq()
 #    mdata.doPlots()
     
-#    mdata.manipulateFDData(6e9,[100e9,3.5e12],mode='zeropadd')
+    mdata.manipulateFDData(6e9,[100e9,3.5e12],mode='zeropadd')
 #    mdata.fdsam.doPlot()
 #    mdata.doPlots()
 #    mdata.manipulateFDData(-11e9,[200e9,2.2e12])

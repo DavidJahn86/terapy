@@ -487,7 +487,7 @@ class FdData():
         #get etalon frequencies:
         #need to interpolate data!
         oldfreqs=rdata[:,0].real       
-        intpdata=interp1d(oldfreqs,abs(rdata[:,1]),'cubic')
+        intpdata=interp1d(oldfreqs,rdata[:,2],'cubic')
         
         fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
         absnew=intpdata(fnew)
