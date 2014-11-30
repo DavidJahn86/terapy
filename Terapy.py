@@ -2,38 +2,47 @@ import pylab as py
 import copy
 import glob
 import os
-from scipy.signal import argrelmax,argrelmin
 from scipy.interpolate import interp1d
 from scipy.constants import c
 from scipy.optimize import minimize
 from TeraData import *
 
-class teradata():
+class HMeas(FdData):
  
     def __init__(self,FDref,FDsam,disableCut=False):
         self.fdref=FDref
         self.fdsam=FDsam
+        #sam td_data is more reliable for example noise calculation
+        self._tdData=FDsam.getassTDData()
+        
         if not disableCut:
             minrf,maxrf=self.fdref.getBandwidth()
             minsf,maxsf=self.fdsam.getBandwidth()
             
-            self.manipulateFDData(-1,[max(minrf,minsf,140e9),min(maxrf,maxsf)])
+            self.manipulateFDData(-1,[max(minrf,minsf,FdData.FMIN),min(maxrf,maxsf,FdData.FMAX)])
         else:
-            self.H=self.calculateH()
+            self.fdData=self.calculatefdData()
         
     def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
+        #this method provides the means to change the underlying fdData objects and recalculate H
+        #if just an interpolated H with fbins is needed, use getInterpolatedFdData from FdData class        
         if fbins>0.5e9:
             if mode=='zeropadd':
-                self.fdref.zeroPadd(fbins)
-                self.fdsam.zeroPadd(fbins)
+                self.zeroPadd()
             else:
                 self.fdref.setFDData(self.fdref.getInterpolatedFDData(fbins))
                 self.fdsam.setFDData(self.fdsam.getInterpolatedFDData(fbins))
                
-        self.fdref.setFDData(self.fdref.cropData(self.fdref.fdData,fbnds[0],fbnds[1]))        
-        self.fdsam.setFDData(self.fdsam.cropData(self.fdsam.fdData,fbnds[0],fbnds[1]))
-        self.H=self.calculateH()
+        self.fdref.setFDData(self.fdref.getcroppedData(self.fdref.fdData,fbnds[0],fbnds[1]))        
+        self.fdsam.setFDData(self.fdsam.getcroppedData(self.fdsam.fdData,fbnds[0],fbnds[1]))
+        
+        self.fdData=self.calculatefdData()
    
+    def zeroPadd(self,fbins):
+        self.fdref.zeroPadd(fbins)
+        self.fdsam.zeroPadd(fbins)
+        self.calculatefdData()
+    
     def calculateConfidenceInterval(self):  
         #x=[a,b,c,d]
         dfda=lambda x: x[2]/(x[2]**2+x[3]**2)
@@ -118,7 +127,10 @@ class teradata():
         self.fdref=FdData(tdrefnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])
         self.fdsam=FdData(tdsamnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])  
 
-    def calculateH(self):
+    def calculatefdData(self):
+        #this function overrides the original fdData (that takes normally a tdData and does the fft)
+        #here instead we use the fdref and fdsam objects to calculate H
+        
         prob_str=self._checkDataIntegrity()
         if not prob_str=='good':
             print "interpolation required"
@@ -129,105 +141,32 @@ class teradata():
             #try if this increases the data quality!
 #            H_ph=py.unwrap(py.angle(self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]))
         H_ph=self.fdref.getUnwrappedPhase()-self.fdsam.getUnwrappedPhase()
-        H=py.column_stack((self.fdref.fdData[:,0],self.fdsam.fdData[:,1]/self.fdref.fdData[:,1],H_unc_real,H_unc_imag,H_ph))
+        H=self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]
+        H=py.column_stack((self.fdref.fdData[:,0],H,abs(H),H_ph,H_unc_real,H_unc_imag))
         return H
-      
-    def getcroppedData(self,data,startfreq=400e9,endfreq=5e12):
-        ix=py.all([data[:,0]>=startfreq,data[:,0]<endfreq],axis=0)
-        return data[ix,:]
-        
-    def doPlots(self):
+         
+    def doPlot(self):
         freqs=self.getfreqsGHz()
         
         py.figure('H-UNC-Plot')
-        py.plot(freqs,self.H[:,1].real)
-        py.plot(freqs,self.H[:,1].imag)
-        py.plot(freqs,self.H[:,1].real+self.H[:,2].real,'g--',freqs,self.H[:,1].real-self.H[:,2].real,'g--')
-        py.plot(freqs,self.H[:,1].imag+self.H[:,3].real,'g--',freqs,self.H[:,1].imag-self.H[:,3].real,'g--')
+        py.plot(freqs,self.fdData[:,1].real)
+        py.plot(freqs,self.fdData[:,1].imag)
+        py.plot(freqs,self.fdData[:,1].real+self.fdData[:,4].real,'g--',freqs,self.fdData[:,1].real-self.fdData[:,4].real,'g--')
+        py.plot(freqs,self.fdData[:,1].imag+self.fdData[:,5].real,'g--',freqs,self.fdData[:,1].imag-self.fdData[:,5].real,'g--')
         py.xlabel('Frequency in GHz')
         py.ylabel('Transfer Function')
         py.legend(('H_real','H_imag'))
 #        
         py.figure('H-PHASE-Plot')
-        py.plot(freqs,self.H[:,-1])
-
-    def getfreqsGHz(self):
-        return self.H[:,0].real*1e-9
-        
-    def findAbsorptionLines(self):
-        
-        #define treshhold
-        tresh=6 #db treshhold to detect a line
-        #bring to logarithmic scale
-        hlog=20*py.log10(abs(self.H[:,1]))
-        #remove etalon minima
-        oldfreqs=self.H[:,0].real
-        intpdata=interp1d(oldfreqs,hlog,'cubic')
-        #take care that the moving average window length is always ap
-        fnew=py.arange(min(oldfreqs),max(oldfreqs),1e9)
-        hlog=intpdata(fnew)
-#        window_size=30
-#        window= py.ones(int(window_size))/float(window_size)
-#        hlog=py.convolve(hlog, window, 'same')
-        ixlines_prob=argrelmin(hlog)[0]
-        ixlines=[]
-        ixmax=argrelmax(hlog)[0]        
-        #check depth of minima compared two the two adjacent maxima
-        
-        
-        if ixmax[0]>ixlines_prob[0]:
-            #true if starts with minimum, treat this case separatedly
-            if hlog[ixmax[0]]-hlog[ixlines_prob[0]]>tresh:
-                ixlines.append(ixlines_prob[0])
-                #and remove first minimum from ixlines_prob
-            ixlines_prob=py.delete(ixlines_prob,0)
-                
-        if ixmax[-1]<ixlines_prob[-1]: #treat this case separatedly
-            if hlog[ixmax[-1]]-hlog[ixlines_prob[-1]]>tresh:
-                ixlines.append(ixlines_prob[0])
-            ixlines_prob=py.delete(ixlines_prob,-1)
-        #now the remaining elements of ixlines, ixmax should be in the order of max min max ... min max 
-        
-        leftdist=hlog[ixmax[:-1]]-hlog[ixlines_prob]
-        rightdist=hlog[ixmax[1:]]-hlog[ixlines_prob]
-        
-        for i in range(len(ixlines_prob)):
-            if (leftdist[i]>tresh or rightdist[i]>tresh) and \
-            hlog[ixlines_prob[i]]<-10:
-                ixlines.append(ixlines_prob[i])        
-        py.plot(fnew,hlog)
-        py.plot(fnew[ixlines],hlog[ixlines],'*')        
-        return fnew[ixlines],ixlines
-    
-    def getEtalonSpacing(self):
-        #how to find a stable range! ? 
-        bw=self.fdsam.getBandwidth()
-        rdata=self.getcroppedData(self.H,max(bw[0],250e9),min(bw[1],3e12))  
-        #get etalon frequencies:
-        #need to interpolate data!
-        oldfreqs=rdata[:,0].real       
-        intpdata=interp1d(oldfreqs,abs(rdata[:,1]),'cubic')
-        
-        fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
-        absnew=intpdata(fnew)
-        ixmaxima=argrelmax(absnew)[0]
-        ixminima=argrelmin(absnew)[0]
-        
-        fmaxima=py.mean(py.diff(fnew[ixmaxima]))
-        fminima=py.mean(py.diff(fnew[ixminima]))
-        
-        df=(fmaxima+fminima)*0.5 #the etalon frequencies
-#        py.figure(17)
-#        py.plot(fnew,absnew)
-#        py.plot(fnew[ixmaxima],absnew[ixmaxima],'+')
-#        py.plot(fnew[ixminima],absnew[ixminima],'+')
-        print str(df/1e9) + " GHz estimated etalon frequency"
-        return df
+        py.plot(freqs,self.fdData[:,3])
+       
+        py.figure('H-ABS-Plot')
+        py.plot(freqs,self.fdData[:,2])
         
     def estimateLDavid(self):
         rdata=self.getcroppedData(self.H,200e9,1e12)
         #calculate phase change
-        p=py.polyfit(rdata[:,0].real,rdata[:,-1].real,1)        
+        p=py.polyfit(rdata[:,0].real,rdata[:,3].real,1)        
         kappa=abs(p[0])
 #        py.figure()
 #        py.plot(rdata[:,0],rdata[:,-1])
@@ -733,12 +672,14 @@ if __name__=="__main__":
 ##    ref_fd.doPlot()
 #    sam_fd.doPlot()
 ##    #initialize the mdata object (H,and so on)
-    mdata=teradata(ref_fd,sam_fd)
-#
+    mdata=HMeas(ref_fd,sam_fd)
+    mdata.doPlot()
+#    print mdata.getSNR()
+    print mdata.getmaxfreq()
 #    mdata.doPlots()
     
 #    mdata.manipulateFDData(6e9,[100e9,3.5e12],mode='zeropadd')
-    mdata.fdsam.doPlot()
+#    mdata.fdsam.doPlot()
 #    mdata.doPlots()
 #    mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 #    l3=mdata.findAbsorptionLines()

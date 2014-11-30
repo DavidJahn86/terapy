@@ -1,5 +1,6 @@
 import pylab as py
 from scipy.interpolate import interp1d
+from scipy.signal import argrelmax,argrelmin
 
 class THzTdData():
 
@@ -331,7 +332,7 @@ class FdData():
         if fbins>0 and self.getfbins()>fbins:
             self.zeroPadd(fbins)
             
-        self.setFDData(self.cropData(self.fdData,fbnds[0],fbnds[1]))
+        self.setFDData(self.getcroppedData(self.fdData,fbnds[0],fbnds[1]))
 
     def zeroPadd(self,fbins):
         spac=1/self._tdData.dt/fbins
@@ -341,9 +342,9 @@ class FdData():
         #leave the old bnds in place
         bnds=[min(self.getfreqs()),max(self.getfreqs())]
         zpd=self.calculatefdData(self._tdData)
-        self.setFDData(self.cropData(zpd,bnds[0],bnds[1]))
+        self.setFDData(self.getcroppedData(zpd,bnds[0],bnds[1]))
         
-    def cropData(self,data,startfreq=FMIN,endfreq=FMAX):
+    def getcroppedData(self,data,startfreq=FMIN,endfreq=FMAX):
         ix=py.all([data[:,0]>=startfreq,data[:,0]<=endfreq],axis=0)
         return data[ix,:]
     
@@ -352,15 +353,14 @@ class FdData():
     
     def getfreqs(self):
         return self.fdData[:,0].real
-        
+
+    def getfreqsGHz(self):
+        return self.getfreqs()*1e-9         
+    
     def getmaxfreq(self):
         #take care of constant offset
-        i=1     
-        fmax=30e9
-        while fmax<100e9:
-            fmax=self.fdData[py.argmax(self.fdData[i:,1]),0]
-            i+=1       
-        
+        cutted=self.getcroppedData(self.fdData,150e9,FdData.FMAX)
+        fmax=cutted[py.argmax(cutted[:,2]),0]
         return fmax
         
     def getUnwrappedPhase(self):        
@@ -378,7 +378,7 @@ class FdData():
         dfreq=py.fftfreq(tdData.num_points,tdData.dt)                
         fdph=self.removePhaseOffset(py.column_stack((dfreq,fdph)))
         t=py.column_stack((dfreq,fd,fdabs,fdph))
-        t=self.cropData(t,0,unc[-1,0])
+        t=self.getcroppedData(t,0,unc[-1,0])
         intpunc=interp1d(unc[:,0],unc[:,1:],axis=0)        
         unc=intpunc(t[:,0])
         return py.column_stack((t[:,:4],unc))
@@ -387,7 +387,7 @@ class FdData():
         #cut data to reasonable range:
         lower=200e9
         upper=1e12        
-        ph_c=self.cropData(ph,lower,upper)
+        ph_c=self.getcroppedData(ph,lower,upper)
         p=py.polyfit(ph_c[:,0],ph_c[:,1],1)
         return ph[:,1]-p[1]
 
@@ -415,12 +415,13 @@ class FdData():
        
         dfreq=py.fftfreq(len(commonTdData[0][:,0]),commonTdData[0][5,0]-commonTdData[0][4,0])
         t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real**2),py.sqrt(noise_imag**2+repeat_noise_imag**2)))
-        return self.cropData(t)
+        return self.getcroppedData(t)
     
     def getSNR(self):
+        #problem here!
         noiselevel=py.mean(abs(py.fft(self._tdData.getPreceedingNoise())))
         maxfreq=self.getmaxfreq()
-        signalmax=self.cropData(self.fdData,maxfreq-4*self.getfbins(),maxfreq+4*self.getfbins())
+        signalmax=self.getcroppedData(self.fdData,maxfreq-4*self.getfbins(),maxfreq+4*self.getfbins())
         return 20*py.log10(py.mean(signalmax[:,2])/noiselevel)        
         
     def getBandwidth(self,dbDistancetoNoise=15):
@@ -433,6 +434,73 @@ class FdData():
         tfr=self.fdData[ix,0]
 
         return min(tfr),max(tfr)
+        
+    def findAbsorptionLines(self):
+        
+        #define treshhold
+        tresh=6 #db treshhold to detect a line
+        #bring to logarithmic scale
+        hlog=20*py.log10(abs(self.fdData[:,1]))
+        #remove etalon minima
+        oldfreqs=self.getfreqs()
+        intpdata=interp1d(oldfreqs,hlog,'cubic')
+        #take care that the moving average window length is always ap
+        fnew=py.arange(min(oldfreqs),max(oldfreqs),1e9)
+        hlog=intpdata(fnew)
+#        window_size=30
+#        window= py.ones(int(window_size))/float(window_size)
+#        hlog=py.convolve(hlog, window, 'same')
+        ixlines_prob=argrelmin(hlog)[0]
+        ixlines=[]
+        ixmax=argrelmax(hlog)[0]        
+        #check depth of minima compared two the two adjacent maxima
+        
+        
+        if ixmax[0]>ixlines_prob[0]:
+            #true if starts with minimum, treat this case separatedly
+            if hlog[ixmax[0]]-hlog[ixlines_prob[0]]>tresh:
+                ixlines.append(ixlines_prob[0])
+                #and remove first minimum from ixlines_prob
+            ixlines_prob=py.delete(ixlines_prob,0)
+                
+        if ixmax[-1]<ixlines_prob[-1]: #treat this case separatedly
+            if hlog[ixmax[-1]]-hlog[ixlines_prob[-1]]>tresh:
+                ixlines.append(ixlines_prob[0])
+            ixlines_prob=py.delete(ixlines_prob,-1)
+        #now the remaining elements of ixlines, ixmax should be in the order of max min max ... min max 
+        
+        leftdist=hlog[ixmax[:-1]]-hlog[ixlines_prob]
+        rightdist=hlog[ixmax[1:]]-hlog[ixlines_prob]
+        
+        for i in range(len(ixlines_prob)):
+            if (leftdist[i]>tresh or rightdist[i]>tresh) and \
+            hlog[ixlines_prob[i]]<-10:
+                ixlines.append(ixlines_prob[i])        
+        py.plot(fnew,hlog)
+        py.plot(fnew[ixlines],hlog[ixlines],'*')        
+        return fnew[ixlines],ixlines
+    
+    def getEtalonSpacing(self):
+        #how to find a stable range! ? 
+        bw=self.getBandwidth()
+        rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],3e12))  
+        #get etalon frequencies:
+        #need to interpolate data!
+        oldfreqs=rdata[:,0].real       
+        intpdata=interp1d(oldfreqs,abs(rdata[:,1]),'cubic')
+        
+        fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
+        absnew=intpdata(fnew)
+        ixmaxima=argrelmax(absnew)[0]
+        ixminima=argrelmin(absnew)[0]
+        
+        fmaxima=py.mean(py.diff(fnew[ixmaxima]))
+        fminima=py.mean(py.diff(fnew[ixminima]))
+        
+        df=(fmaxima+fminima)*0.5 #the etalon frequencies
+        print str(df/1e9) + " GHz estimated etalon frequency"
+        return df
+
 
     def doPlot(self):
 
@@ -457,7 +525,7 @@ if __name__=='__main__':
 
     
     myFDData=FdData(myTDData)
-    myFDData.getBandwidth()
+#    print myFDData.getBandwidth()
 #    py.plot(myFDData.getfreqs(),myFDData.fdData[:,2])
 #    myFDData.doPlot()
 #    myFDData.zeroPadd(5e9)
@@ -470,5 +538,5 @@ if __name__=='__main__':
     
     
     
-    #myFDData.setFDData(myFDData.cropData(myFDData.fdData,150e9,4e12))
+    #myFDData.setFDData(myFDData.getcroppedData(myFDData.fdData,150e9,4e12))
 #    myFDData.doPlot()    
