@@ -87,8 +87,8 @@ class HMeas(FdData):
         if tdrefData.getLength()!=tdsamData.getLength():
             return 'td-Problem-len'
         
-        if abs(tdrefData.tdData[-1,0]-tdsamData.tdData[-1,0])>1e-18 or\
-            abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-18:
+        if abs(tdrefData.tdData[-1,0]-tdsamData.tdData[-1,0])>1e-16 or\
+            abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-16:
             return 'td-Problem-interval'
         
         if len(self.fdref.fdData[:,1])!= len(self.fdsam.fdData[:,1]):
@@ -136,7 +136,8 @@ class HMeas(FdData):
         
         prob_str=self._checkDataIntegrity()
         if not prob_str=='good':
-            print "interpolation required"
+            print("interpolation required")
+            print(prob_str)
             self.interpolateData(prob_str)
         
         H_unc_real,H_unc_imag=self.calculateSTDunc()
@@ -146,8 +147,8 @@ class HMeas(FdData):
         H_ph=self.fdref.getUnwrappedPhase()-self.fdsam.getUnwrappedPhase()
         H=self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]
         H=py.column_stack((self.fdref.fdData[:,0],H,abs(H),H_ph,H_unc_real,H_unc_imag))
-        return H
-         
+        return H    
+    
     def doPlot(self):
         freqs=self.getfreqsGHz()
         
@@ -185,8 +186,11 @@ class teralyz():
     n_0=1.00027-0.0000j
    
     def __init__(self,measurementdata,thickness=None,unc=50e6,steps=10):
-        self.mdata=measurementdata
-        l,n=self.mdata.estimateLDavid()        
+        
+        self.H=measurementdata
+        self.H_firstPuls=self.getHFirstPuls()
+        
+        l,n=self.H.estimateLDavid()        
         self.n_estimated=n
         self.l_estimated=l
     
@@ -200,10 +204,24 @@ class teralyz():
         self.n_estimated_user=self.nestimatedTD(measurementdata.fdsam._tdData,measurementdata.fdref._tdData)
         self.l_opt=self.userthickness
         self.n=0
-        print "A priori estimated Width: " + str(l*1e6)
-        print "A priori estimated n: " + str(n)
+        print("A priori estimated Width: " + str(l*1e6))
+        print("A priori estimated n: " + str(n))
         self.no_echos=self.calculate_no_echos(measurementdata.fdsam._tdData)
         self.outfilename=self.getFilenameSuggestion()
+    
+    def getHFirstPuls(self):
+        origlen=self.H.fdref._tdData.getLength() 
+        refdata=THzTdData(self.H.fdref._tdData.getFirstPuls(10e-12),existing=True)
+        samdata=THzTdData(self.H.fdsam._tdData.getFirstPuls(5e-12),existing=True)
+        refdata.zeroPaddData(origlen-refdata.getLength())
+        samdata.zeroPaddData(origlen-samdata.getLength())
+        
+        firstref=FdData(refdata)
+        firstsam=FdData(samdata)
+        
+        H_firstPuls=HMeas(firstref,firstsam,disableCut=True)
+        
+        return H_firstPuls
  
     def setOutfilename(self,newname):
         self.outfilename=newname
@@ -243,16 +261,16 @@ class teralyz():
         return n
     
     def findLintelli(self):
-        fmax=self.mdata.fdref.getmaxfreq()
+        fmax=self.H.fdref.getmaxfreq()
         
  #       bnds=(self.thicknessestimate-2*self.thicknessstd,self.thicknessestimate+3*self.thicknessstd)
-#        print bnds        
+#        print(bnds)
         #overthink once more the cropping length
         n=self.n_estimated
         #oscillation period can be calculated from H data!
         f_span=c/2*1/self.l_estimated*1/n #(this should be the length of the oscillation)
         
-        calcdata=copy.deepcopy(self.mdata)      
+        calcdata=copy.deepcopy(self.H)
         calcdata.manipulateFDData(-1,[fmax-f_span*1,fmax+f_span*4])
         
         H_small=calcdata.fdData
@@ -262,46 +280,15 @@ class teralyz():
         return t.x[0]
         
     def errorL(self,l,H):
-        n_small=[]
-        n_small.append(self.calculaten(H,l))
+        n_small=[self.calculaten(H,l)]
+    
         qs=self.QuasiSpace(n_small,H[1,0]-H[0,0],l)
         tv=self.totalVariation(n_small)
         py.plot(l,qs[0],'+')
         py.plot(l,tv[0],'*')        
-        print "Currently evaluating length: "+ str(l[0]*1e6) + " TV Value " + str(tv[0])
+        print("Currently evaluating length: "+ str(l[0]*1e6) + " TV Value " + str(tv[0]))
         return qs[0]
-    
-#    def findL(self):
-#        #1) cut frequency bands to narrow range around maxima
-#        #take care to dont get the dc component
-#        i=1     
-#        fmax=0
-#        while fmax<100e9:
-#            fmax=self.mdata.H[py.argmax(self.mdata.fdref[i:,1]),0]
-#            i+=1
-#        print fmax/1e9
-#        #overthink once more the cropping length
-#        ls=self.getLengthes()
-#        f_span=c/2*1/self.thicknessestimate #(this should be the length of the oscillation)
-#        print str(f_span/1e9) + " GHz oscillation expected" 
-#        #f_span=100e9 #try to set it fix first        
-#        H_small=self.mdata.getcroppedData(self.mdata.H,fmax-f_span/2,fmax+f_span*3)
-#    
-#        #2) calculate n for all ls of the smalldata
-#        calcs=[]
-#        for l in ls:
-#            calcs.append(self.calculaten(H_small,l))
-#        py.figure(22)
-#        allqs=self.QuasiSpace(calcs,H_small[1,0]-H_small[0,0],ls)  
-#        alltvs=self.totalVariation(calcs)
-#        py.plot(ls,allqs-min(allqs),'*')
-#        py.plot(ls,alltvs-min(alltvs))
-#        py.legend(('Quasi space method','TV method'))
-#        print "optimal l quasi space: " + str(ls[py.argmin(allqs)]*1e6)
-#        print "optimal l Total Variation: " + str(ls[py.argmin(alltvs)]*1e6)
-#        
-#        return ls[py.argmin(alltvs)],calcs
-        
+       
     def QuasiSpace(self,ns,df,ls):
         allqs=[]
         #at the moment, the most easy method(everything else failed...)
@@ -314,7 +301,7 @@ class teralyz():
             QSr=py.fft(ns[i].real-py.mean(ns[i].real))
             QSi=py.fft(ns[i].imag-py.mean(ns[i].real))
             #naive cut:
-            ix=range(3,(len(QSr)/2-1))
+            ix=range(3,int(len(QSr)/2-1))
         
             QSr=QSr[ix]
             QSi=QSi[ix]
@@ -347,10 +334,10 @@ class teralyz():
         H_r=H_smoothed.real
         H_i=H_smoothed.imag
         f=1
-        lb_r=self.mdata.fdData[:,1].real-self.mdata.fdData[:,4]*f
-        lb_i=self.mdata.fdData[:,1].imag-self.mdata.fdData[:,5]*f
-        ub_r=self.mdata.fdData[:,1].real+self.mdata.fdData[:,4]*f
-        ub_i=self.mdata.fdData[:,1].imag+self.mdata.fdData[:,5]*f
+        lb_r=self.H.fdData[:,1].real-self.H.fdData[:,4]*f
+        lb_i=self.H.fdData[:,1].imag-self.H.fdData[:,5]*f
+        ub_r=self.H.fdData[:,1].real+self.H.fdData[:,4]*f
+        ub_i=self.H.fdData[:,1].imag+self.H.fdData[:,5]*f
         
         #ix=all indices for which after smoothening n H is still inbetwen the bounds        
         ix=py.all([H_r>=lb_r,H_r<ub_r,H_i>=lb_i,H_i<ub_i],axis=0)
@@ -358,26 +345,18 @@ class teralyz():
         for i in range(len(n_smoothed)):
             if ix[i]==0:
                 n_smoothed[i]=n[i]
-        print "SVMAF changed the refractive index at " + str(sum(ix)) + " frequencies"
+        print("SVMAF changed the refractive index at " + str(sum(ix)) + " frequencies")
         return n_smoothed      
       
     def calculateinits(self,H,l):
+        #the frequency axis that will be used for the calculation
+        oldfreqaxis=self.H.getfreqs()
+        #this could be done once for all to gain speed!
+        intpH=interp1d(self.H_firstPuls.getfreqs(),self.H_firstPuls.fdData[:,1:],axis=0)
+        newH=intpH(oldfreqaxis)
+  
         #crop the time domain data to the first pulse and apply than the calculation
-        origlen=self.mdata.fdref._tdData.getLength() 
-        refdata=THzTdData(self.mdata.fdref._tdData.getFirstPuls(10e-12),existing=True)
-        samdata=THzTdData(self.mdata.fdsam._tdData.getFirstPuls(5e-12),existing=True)
-        refdata.zeroPaddData(origlen-refdata.getLength())
-        samdata.zeroPaddData(origlen-samdata.getLength())
-        
-        firstref=FdData(refdata)
-        firstsam=FdData(samdata)
-       
-        initTeraData=teradata(firstref,firstsam,disableCut=True)
-        
-        oldfreqaxis=self.mdata.H[:,0].real
-        intpH=interp1d(initTeraData.H[:,0],initTeraData.H[:,1:],axis=0)
-        newH=intpH(oldfreqaxis.real)
-        n=self.n_0-newH[:,3]/(2*py.pi*oldfreqaxis*l)*c
+        n=self.n_0-newH[:,2]/(2*py.pi*oldfreqaxis*l)*c
         alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(abs(newH[:,0])*(n+1)**2/(4*n))
 
         return n.real,alpha.real
@@ -386,8 +365,8 @@ class teralyz():
         inits=self.calculateinits(H,l)
         py.figure(figurenumber)
         py.title('Initial Conditions')
-        py.plot(H[:,0].real/1e9,inits[0])
-        py.plot(H[:,0].real/1e9,-inits[1])
+        py.plot(self.H.getfreqsGHz(),inits[0])
+        py.plot(self.H.getfreqsGHz(),-inits[1])
         py.xlabel('Frequency in GHz')
         py.ylabel('optical constant value')
         py.legend(('n_real','n_imag'))
@@ -408,35 +387,38 @@ class teralyz():
 
         for i in range(nums):
             
-            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:],l), method='SLSQP',\
+            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:2],l), method='SLSQP',\
             bounds=bnds, options={'ftol':1e-9,'maxiter':2000, 'disp': False})
 #            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:],l), method='Nelder-Mead',
 #            options={'xtol': 1e-6,'disp':False})
             res.append(t.x[0]-1j*t.x[1])
             vals.append(t.fun)
-        return py.asarray(res)
-    
+        n=py.asarray(res)
+        self.n=py.column_stack((H[:,0],n,n))
+        return n
+
+        
     def doCalculation(self,bool_findl=1,n_SVMAFS=5,bool_silent=0):
         if bool_findl:
             self.l_opt=self.findLintelli()
 
-        print '\033[92m\033[1m' + '  Use Sample Thickness: ' + str(self.l_opt*1e6) + ' micro m ' + '\033[0m'
+        print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(self.l_opt*1e6) + ' micro m ' + '\033[0m')
 
 
-        n=self.calculaten(self.mdata.fdData,self.l_opt)
+        n=self.calculaten(self.H.fdData,self.l_opt)
         n_smoothed=n
         i=0
         
         while i<n_SVMAFS:
-            n_smoothed=self.SVMAF(self.mdata.getfreqs(),n_smoothed,self.l_opt)
+            n_smoothed=self.SVMAF(self.H.getfreqs(),n_smoothed,self.l_opt)
             i+=1
 
-        self.n=py.column_stack((self.mdata.getfreqs(),n,n_smoothed))        
+        self.n=py.column_stack((self.H.getfreqs(),n,n_smoothed))        
         
         return self.n
         
     def getFilenameSuggestion(self):
-        filenames=self.mdata.fdsam._tdData.getfilename()
+        filenames=self.H.fdsam._tdData.getfilename()
         filenames=filenames[0]
         filenames=os.path.split(filenames)[-1]
              
@@ -461,15 +443,15 @@ class teralyz():
         
     def saveResults(self,filename=None):
         
-        H_theory=self.H_theory(self.mdata.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
+        H_theory=self.H_theory(self.H.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
         #built the variable that should be saved:        
         savetofile=py.column_stack((
         self.n[:,0].real,
         self.n[:,1].real,self.n[:,1].imag, #the real and imaginary part of n
         self.n[:,2].real,self.n[:,2].imag, #the real and imaginary part of the smoothed n
-        self.mdata.fdData[:,1].real,self.mdata.fdData[:,1].imag,#H_measured
-        self.mdata.fdData[:,4].real,self.mdata.fdData[:,5].real,#uncertainties
-        self.mdata.fdData[:,2].real,self.mdata.fdData[:,3].real,#absH,ph H measured    
+        self.H.fdData[:,1].real,self.H.fdData[:,1].imag,#H_measured
+        self.H.fdData[:,4].real,self.H.fdData[:,5].real,#uncertainties
+        self.H.fdData[:,2].real,self.H.fdData[:,3].real,#absH,ph H measured    
         H_theory.real,H_theory.imag, #theoretic H
         ))
 
@@ -523,15 +505,15 @@ class teralyz():
     def plotErrorFunction(self,l,freq):
         py.figure()
         resolution=300
-        ix=py.argmin(abs(freq-self.mdata.getfreqs()))
+        ix=py.argmin(abs(freq-self.H.getfreqs()))
         n_i=py.linspace(0.0,0.05,int(resolution/2))
         n_r=py.linspace(1,3,resolution)
         N_R,N_I=py.meshgrid(n_r,n_i)
         E_fu=py.zeros((len(n_i),len(n_r)))
         for i in range(len(n_r)):
             for k in range(len(n_i)):
-                E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.mdata.fdData[ix,:],l)
-#        print E_fu[:,2]
+                E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.H.fdData[ix,:],l)
+#        print(E_fu[:,2])
         py.pcolor(N_R,N_I,py.log10(E_fu))
         py.colorbar()
 
@@ -676,21 +658,30 @@ if __name__=="__main__":
 #    sam_fd.doPlot()
 ##    #initialize the mdata object (H,and so on)
     mdata=HMeas(ref_fd,sam_fd)
-    mdata.doPlot()
-#    print mdata.getSNR()
-#    print mdata.getmaxfreq()
+#    mdata.doPlot()
+#    print(mdata.getSNR())
+#    print(mdata.getmaxfreq())
 #    mdata.doPlots()
     
-    mdata.manipulateFDData(6e9,[100e9,3.5e12],mode='zeropadd')
+#    mdata.manipulateFDData(6e9,[100e9,3.5e12],mode='zeropadd')
 #    mdata.fdsam.doPlot()
 #    mdata.doPlots()
-#    mdata.manipulateFDData(-11e9,[200e9,2.2e12])
+#    mdata.doPlot()    
+    mdata.manipulateFDData(-1e9,[200e9,2.2e12])
+    
 #    l3=mdata.findAbsorptionLines()
  
-#    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
-        
-#    myana.plotInits(mdata.H,thickness)
-#    myana.doCalculation()
-#    myana.plotRefractiveIndex(1,1)
+ 
+    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
+#    myana.calculaten(mdata.fdData,thickness)
+#    mdata.doPlot()
+#    myana.plotInits(myana.H,thickness)
+#    myana.plotInits(myana.H_firstPuls,thickness)
+#    myana.H.doPlot()
+#    myana.H_firstPuls.doPlot()
+#
+#    myana.plotInits(mdata.fdData,thickness)
+    myana.doCalculation()
+    myana.plotRefractiveIndex(1,1)
 #    myana.saveResults()
    

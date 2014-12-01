@@ -7,7 +7,7 @@ class THzTdData():
     def __init__(self,*kw,**kwargs):
         self._thzdata_raw=[]
 
-        if not kwargs.has_key('existing'):
+        if not 'existing' in kwargs:
             #create instance by loading filenames
             filenames=kw[0]
             if len(kw)<2:
