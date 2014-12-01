@@ -1,6 +1,6 @@
 import pylab as py
 from scipy.interpolate import interp1d
-from scipy.signal import argrelmax,argrelmin
+import scipy.signal as signal
 
 class THzTdData():
 
@@ -50,7 +50,7 @@ class THzTdData():
         nearestdistancetopeak=2.5e-12
         if min(self._thzdata_raw[0][:,0])+timePreceedingSignal>-nearestdistancetopeak:
             timePreceedingSignal=-min(self._thzdata_raw[0][:,0])-nearestdistancetopeak
-            print "Time Interval of preceeding noise to long, reset done"
+            print("Time Interval of preceeding noise to long, reset done")
             #dont use user input if higher than peak
        #really neccessary for each dataset, or would it suffice to take the first?
         for i in range(self.numberOfDataSets):       
@@ -128,11 +128,11 @@ class THzTdData():
         
         #do it always, just print a warning, if miss_points_max is exceeded
         if min(all_lengthes)!=max(all_lengthes):
-            print "Datalength of suceeding measurements not consistent, try to fix"
+            print("Datalength of suceeding measurements not consistent, try to fix")
             if max(all_lengthes)-min(all_lengthes)>miss_points_max:
-                print "Warning: Data seems to be corrupted. \n" +\
+                print("Warning: Data seems to be corrupted. \n" +\
                 "The length of acquired data of repeated measurements differs by \n" + \
-                    str(max(all_lengthes)-min(all_lengthes)) + ' datapoints'
+                    str(max(all_lengthes)-min(all_lengthes)) + ' datapoints')
         
         #interpolation does no harm, even if everything is consistent (no interpolation in this case)
         commonMIN=max([thistdData[:,0].min() for thistdData in tdDatas])
@@ -299,7 +299,7 @@ class FdData():
         
         #self._fdData_raw holds the raw _fdData should also not be altered from outside
         #fdData have always the following structure #col1=freq,col2=complexfft, col3=abs(col2), col4=ph(col2)    
-        self.setFDData(self.calculatefdData(self._tdData))       
+        self.setFDData(self.calculatefdData(self._tdData))  
         self.resetfdData(fbins,fbnds)
 
 
@@ -450,9 +450,9 @@ class FdData():
 #        window_size=30
 #        window= py.ones(int(window_size))/float(window_size)
 #        hlog=py.convolve(hlog, window, 'same')
-        ixlines_prob=argrelmin(hlog)[0]
+        ixlines_prob=signal.argrelmin(hlog)[0]
         ixlines=[]
-        ixmax=argrelmax(hlog)[0]        
+        ixmax=signal.argrelmax(hlog)[0]        
         #check depth of minima compared two the two adjacent maxima
         
         
@@ -491,46 +491,76 @@ class FdData():
         
         fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
         absnew=intpdata(fnew)
-        ixmaxima=argrelmax(absnew)[0]
-        ixminima=argrelmin(absnew)[0]
+        ixmaxima=signal.argrelmax(absnew)[0]
+        ixminima=signal.argrelmin(absnew)[0]
         
         fmaxima=py.mean(py.diff(fnew[ixmaxima]))
         fminima=py.mean(py.diff(fnew[ixminima]))
         
         df=(fmaxima+fminima)*0.5 #the etalon frequencies
-        print str(df/1e9) + " GHz estimated etalon frequency"
+        print(str(df/1e9) + " GHz estimated etalon frequency")
         return df
 
+    def getFilteredData(self):
+        bw=self.getBandwidth()
+        rdata=self.getcroppedData(self.fdData,bw[0],bw[1])
+#        hlog=20*py.log10(rdata[:,2])
+        #remove etalon minima
+        fbins=self.getfbins()
+        N_max=int(200e9/fbins)
+        N_min=int(20e9/fbins)
+        
+#        peaks=signal.find_peaks_cwt(rdata,)
+#        intpdata=interp1d(oldfreqs,hlog,'cubic')
+        #take care that the moving average window length is always ap
+#        fnew=py.arange(min(oldfreqs),max(oldfreqs),1e9)
+#        hlog=intpdata(fnew)
+        phasechange=py.diff(rdata[:,3])
+        me=py.mean(phasechange)
+        print(py.std(phasechange))
+        py.plot(rdata[1:,0],abs(me-phasechange))
+        py.plot(rdata[:,0],py.log10(rdata[:,2]/max(rdata[:,2])))
 
     def doPlot(self):
 
         py.figure('FD-ABS-Plot')
-        py.plot(self.fdData[:,0].real/1e9,20*py.log10(abs(self.fdData[:,2])))
+        py.plot(self.getfreqsGHz(),20*py.log10(abs(self.fdData[:,2])))
         py.xlabel('Frequency in GHz')
         py.ylabel('Amplitude, arb. units')
         
         py.figure('FD-PHASE-Plot')
-        py.plot(self.fdData[:,0].real/1e9,self.fdData[:,3].real)                
+        py.plot(self.getfreqsGHz(),self.fdData[:,3].real)                
 
 if __name__=='__main__':
     import glob
-    
-    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sam*')
+    path2='/home/jahndav/Dropbox/THz-Analysis/'    
+    samfiles=glob.glob(path2+'MarburgData/*_Lact3*')
+#    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sam*')
  
-    myTDData=THzTdData(samfiles)
+    myTDData=ImportMarburgData(samfiles)
 
 #    myTDData.doTdPlot()
     
 #    myTDData.doPlotWithunc()
-
-    
+ 
     myFDData=FdData(myTDData)
-#    print myFDData.getBandwidth()
+    myFDData.doPlot()
+#    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,3]/max(myFDData.fdData[:,3])-3)
+#    py.plot(myFDData.getfreqsGHz(),py.log10(myFDData.fdData[:,2]/max(myFDData.fdData[:,2])))
+    
+#    interpolatedData=myFDData.getInterpolatedFDData(2e9)
+#    py.plot(interpolatedData[:,0]/1e9,py.log10(interpolatedData[:,2]))
+#    myFDData.zeroPadd(2e9)
+# 
+#    py.plot(myFDData.getfreqsGHz(),py.log10(myFDData.fdData[:,2]))
+#    py.xlim(0,2e3)
+##    myFDData.getFilteredData()
+#    print(myFDData.getBandwidth())
 #    py.plot(myFDData.getfreqs(),myFDData.fdData[:,2])
 #    myFDData.doPlot()
 #    myFDData.zeroPadd(5e9)
 #    myFDData.doPlot()
-#    print myFDData.getSNR()    
+#    print(myFDData.getSNR())
 #    myFDData.doPlot()    
 #    
 #    myFDData.setFDData(myFDData.getInterpolatedFDData(5e9))
