@@ -42,7 +42,7 @@ sam_fd=TeraData.FdData(samtd)
 
 ##    #initialize the mdata object (H,and so on)
 
-mdata=Terapy.Hmeas(ref_fd,sam_fd)
+mdata=Terapy.HMeas(ref_fd,sam_fd)
 
 mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 
@@ -75,7 +75,7 @@ if args.savePlots:
     pylab.savefig(args.outname + 'PHASE-Frequency-Domain.png')
     pylab.close()
     
-    mdata.doPlots()
+    mdata.doPlot()
     pylab.savefig(args.outname + 'TransferFunction.png')
     pylab.close()
 #
