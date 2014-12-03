@@ -79,7 +79,7 @@ class THzTdData():
         if tdDatas.shape[0]==1:
             uncarray=py.zeros((len(tdDatas[0,:,0]),))
         else:
-            uncarray=py.std(py.asarray(tdDatas),axis=0)      
+            uncarray=py.std(py.asarray(tdDatas[:,:,1]),axis=0)    
         return uncarray
        
     def importfile(self,fname,params):
@@ -179,6 +179,14 @@ class THzTdData():
         
     def getfilename(self):
         return self.filename
+    
+    def getDR(self):
+        Emax=max(abs(self.tdData[:,1]))
+        noise=py.sqrt(py.mean(self.getPreceedingNoise()**2))
+        return Emax/noise
+    
+    def getSNR(self):
+        return abs(self.tdData[:,1])/self.tdData[:,2]
     
     def getTimeWindowLength(self):
         peak=self.getPeakPosition()
@@ -556,8 +564,8 @@ class FdData():
 if __name__=='__main__':
     import glob
     path2='/home/jahndav/Dropbox/THz-Analysis/'    
-    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
-#    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sam*')
+#    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
+    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sam*')
  
     myTDData=ImportMarburgData(samfiles)
 
