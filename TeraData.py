@@ -301,7 +301,7 @@ class FdData():
         #fdData have always the following structure #col1=freq,col2=complexfft, col3=abs(col2), col4=ph(col2)    
         self.setFDData(self.calculatefdData(self._tdData))  
         self.resetfdData(fbins,fbnds)
-
+        self.maxDR=max(self.getDR())
 
     def getInterpolatedFDData(self,newfbins,strmode='linear'):
         oldfreqs=self.getfreqs()
@@ -415,46 +415,46 @@ class FdData():
        
         dfreq=py.fftfreq(len(commonTdData[0][:,0]),commonTdData[0][5,0]-commonTdData[0][4,0])
         t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real**2),py.sqrt(noise_imag**2+repeat_noise_imag**2)))
-        return self.getcroppedData(t)
+        return self.getcroppedData(t)    
     
-    def getSNR(self):
-        #problem here!
+    def getDR(self):
         noiselevel=py.mean(abs(py.fft(self._tdData.getPreceedingNoise())))
-        maxfreq=self.getmaxfreq()
-        signalmax=self.getcroppedData(self.fdData,maxfreq-4*self.getfbins(),maxfreq+4*self.getfbins())
-        return 20*py.log10(py.mean(signalmax[:,2])/noiselevel)        
-        
+        window_size=5
+        window=py.ones(int(window_size))/float(window_size)
+        hlog=py.convolve(20*py.log10(self.fdData[:,2].real), window, 'valid')
+        one=py.ones((2,))
+        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
+        return hlog-20*py.log10(noiselevel)         
+    
     def getBandwidth(self,dbDistancetoNoise=15):
         #this function should return the lowest trustable and highest trustable frequency, 
         # along with the resulting bandwidth
-        SNR=self.getSNR()
         
         absdata=-20*py.log10(self.fdData[:,2]/max(self.fdData[:,2]))
-        ix=SNR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
+        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
         tfr=self.fdData[ix,0]
 
         return min(tfr),max(tfr)
         
     def findAbsorptionLines(self):
-        
-        #define treshhold
-        tresh=6 #db treshhold to detect a line
+        #no interpolation here, just return the measured data peak index
+        tresh=8 #db treshhold to detect a line
+        #filter first
+    
         #bring to logarithmic scale
-        hlog=20*py.log10(abs(self.fdData[:,1]))
-        #remove etalon minima
-        oldfreqs=self.getfreqs()
-        intpdata=interp1d(oldfreqs,hlog,'cubic')
-        #take care that the moving average window length is always ap
-        fnew=py.arange(min(oldfreqs),max(oldfreqs),1e9)
-        hlog=intpdata(fnew)
-#        window_size=30
-#        window= py.ones(int(window_size))/float(window_size)
-#        hlog=py.convolve(hlog, window, 'same')
+        hlog=20*py.log10(self.fdData[:,2])
+        
+#        window_size=int(self.getEtalonSpacing()/self.getfbins())
+#        window_size+=window_size%2+1
+#        window=py.ones(int(window_size))/float(window_size)
+#        hlog=py.convolve(20*py.log10(self.fdData[:,2].real), window, 'valid')
+#        one=py.ones((window_size-1)/2,)
+#        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
+#        #remove etalon minima
         ixlines_prob=signal.argrelmin(hlog)[0]
         ixlines=[]
         ixmax=signal.argrelmax(hlog)[0]        
         #check depth of minima compared two the two adjacent maxima
-        
         
         if ixmax[0]>ixlines_prob[0]:
             #true if starts with minimum, treat this case separatedly
@@ -467,21 +467,32 @@ class FdData():
             if hlog[ixmax[-1]]-hlog[ixlines_prob[-1]]>tresh:
                 ixlines.append(ixlines_prob[0])
             ixlines_prob=py.delete(ixlines_prob,-1)
-        #now the remaining elements of ixlines, ixmax should be in the order of max min max ... min max 
-        
+
+        #now the remaining elements of ixlines, ixmax should be in the order of max min max ... min max         
         leftdist=hlog[ixmax[:-1]]-hlog[ixlines_prob]
         rightdist=hlog[ixmax[1:]]-hlog[ixlines_prob]
         
         for i in range(len(ixlines_prob)):
-            if (leftdist[i]>tresh or rightdist[i]>tresh) and \
-            hlog[ixlines_prob[i]]<-10:
-                ixlines.append(ixlines_prob[i])        
-        py.plot(fnew,hlog)
-        py.plot(fnew[ixlines],hlog[ixlines],'*')        
-        return fnew[ixlines],ixlines
+            #check if distance is higher than treshhold
+            if (leftdist[i]>tresh or rightdist[i]>tresh):
+                ixlines.append(ixlines_prob[i])
+        
+        #remove inappropriate lines (by distance so far, at least 5 datapoints!
+        ixlines=py.asarray(ixlines)
+        dix=py.diff(ixlines)        
+        while len(dix[dix<6])>0:
+            if hlog[ixlines[i]]<hlog[ixlines[i+1]]:
+                    ixlines[i]=-1
+        
+        ixlines=ixlines[dix>5]
+        f=self.getfreqsGHz()
+        py.plot(f,hlog)
+        py.plot(f[ixlines],hlog[ixlines],'+')        
+        return f[ixlines],ixlines
     
     def getEtalonSpacing(self):
         #how to find a stable range! ? 
+#        etalonData=self.getFilteredData(20e9,3)
         bw=self.getBandwidth()
         rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],3e12))  
         #get etalon frequencies:
@@ -501,26 +512,21 @@ class FdData():
         print(str(df/1e9) + " GHz estimated etalon frequency")
         return df
 
-    def getFilteredData(self):
-        bw=self.getBandwidth()
-        rdata=self.getcroppedData(self.fdData,bw[0],bw[1])
-#        hlog=20*py.log10(rdata[:,2])
+    def getFilteredData(self,windowlen=100e9,maxorder=3):
+        #windowlength should be smaller the etalon frequency, in order to emphasize them
+        #for the length algorithm
+        #it should be of the order of typical absorption line widthes for their analysis
         #remove etalon minima
         fbins=self.getfbins()
-        N_max=int(200e9/fbins)
-        N_min=int(20e9/fbins)
+        #100e9 should be replaced by the Etalon frequency 
+        N_min=int(windowlen/fbins)
+        order=min(N_min-1,maxorder)
         
-#        peaks=signal.find_peaks_cwt(rdata,)
-#        intpdata=interp1d(oldfreqs,hlog,'cubic')
-        #take care that the moving average window length is always ap
-#        fnew=py.arange(min(oldfreqs),max(oldfreqs),1e9)
-#        hlog=intpdata(fnew)
-        phasechange=py.diff(rdata[:,3])
-        me=py.mean(phasechange)
-        print(py.std(phasechange))
-        py.plot(rdata[1:,0],abs(me-phasechange))
-        py.plot(rdata[:,0],py.log10(rdata[:,2]/max(rdata[:,2])))
-
+        absdata=signal.savgol_filter(self.fdData[:,2],N_min-N_min%2+1,order)
+        phdata=signal.savgol_filter(self.fdData[:,3],N_min-N_min%2+1,order)
+       
+        return py.column_stack((self.fdData[:,0],self.fdData[:,1],absdata,phdata,self.fdData[:,4:]))
+    
     def doPlot(self):
 
         py.figure('FD-ABS-Plot')
@@ -539,34 +545,15 @@ if __name__=='__main__':
  
     myTDData=ImportMarburgData(samfiles)
 
-#    myTDData.doTdPlot()
-    
-#    myTDData.doPlotWithunc()
- 
     myFDData=FdData(myTDData)
-    myFDData.doPlot()
-#    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,3]/max(myFDData.fdData[:,3])-3)
-#    py.plot(myFDData.getfreqsGHz(),py.log10(myFDData.fdData[:,2]/max(myFDData.fdData[:,2])))
-    
-#    interpolatedData=myFDData.getInterpolatedFDData(2e9)
-#    py.plot(interpolatedData[:,0]/1e9,py.log10(interpolatedData[:,2]))
-#    myFDData.zeroPadd(2e9)
-# 
-#    py.plot(myFDData.getfreqsGHz(),py.log10(myFDData.fdData[:,2]))
-#    py.xlim(0,2e3)
-##    myFDData.getFilteredData()
-#    print(myFDData.getBandwidth())
-#    py.plot(myFDData.getfreqs(),myFDData.fdData[:,2])
-#    myFDData.doPlot()
-#    myFDData.zeroPadd(5e9)
-#    myFDData.doPlot()
-#    print(myFDData.getSNR())
-#    myFDData.doPlot()    
-#    
-#    myFDData.setFDData(myFDData.getInterpolatedFDData(5e9))
-#    myFDData.doPlot()
-    
-    
-    
-    #myFDData.setFDData(myFDData.getcroppedData(myFDData.fdData,150e9,4e12))
-#    myFDData.doPlot()    
+    myFDData.findAbsorptionLines()
+#    myFDData.setFDData(myFDData.getcroppedData(myFDData.fdData,200e9,2200e9))
+#    etalon=myFDData.getEtalonSpacing()
+#    Ns=int(etalon/myFDData.getfbins())
+#    Ns=py.arange(max(1,Ns-10),Ns+10,1)
+#    hlog=20*py.log10(myFDData.fdData[:,2])
+#    peaks=signal.find_peaks_cwt((hlog**2),Ns)
+#    f=myFDData.getfreqsGHz()
+#        
+#    py.plot(f,hlog)
+#    py.plot(f[peaks],hlog[peaks],'*')
