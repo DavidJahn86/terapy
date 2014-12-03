@@ -19,7 +19,11 @@ class HMeas(FdData):
             self.resetfdData()
         else:
             self.fdData=self.calculatefdData()
-    
+        self.maxDR=max(self.getDR())
+    #functions that need to be overridden
+    def getDR(self):
+         return self.fdsam.getDR()
+            
     def resetfdData(self,fbins=-1,fbnds=[FdData.FMIN,FdData.FMAX]):
             minrf,maxrf=self.fdref.getBandwidth()
             minsf,maxsf=self.fdsam.getBandwidth()
@@ -633,7 +637,7 @@ if __name__=="__main__":
     
 
     #Load Parameters from getparams
-    thickness,samfiles,reffiles,mode,teralyzer=getparams('rehi')
+    thickness,samfiles,reffiles,mode,teralyzer=getparams('Lactose2')
     #depending on format use different import module
     if mode=='lucastestformat':
         reftd=THzTdData(reffiles)
@@ -646,42 +650,26 @@ if __name__=="__main__":
         reftd=ImportInrimData(reffiles)
         samtd=ImportInrimData(samfiles)
 
-#    reftd.doPlotWithunc()
-#    samtd.doPlotWithunc()
 #    #initialize the fd_data objects
-            
-    ref_fd=FdData(reftd)
+    ref_fd=FdData(reftd)        
     sam_fd=FdData(samtd)
-#    sam_fd.zeroPadd(5e9)
-    
-##    ref_fd.doPlot()
-#    sam_fd.doPlot()
-##    #initialize the mdata object (H,and so on)
+#    #initialize the mdata object (H,and so on)
     mdata=HMeas(ref_fd,sam_fd)
-#    mdata.doPlot()
-#    print(mdata.getSNR())
-#    print(mdata.getmaxfreq())
-#    mdata.doPlots()
-    
-#    mdata.manipulateFDData(6e9,[100e9,3.5e12],mode='zeropadd')
-#    mdata.fdsam.doPlot()
-#    mdata.doPlots()
-#    mdata.doPlot()    
     mdata.manipulateFDData(-1e9,[200e9,2.2e12])
+    peaks=mdata.findAbsorptionLines()
+    py.plot(mdata.getfreqsGHz(),20*py.log10(mdata.fdData[:,2]))
+    py.plot(mdata.getfreqsGHz()[peaks],20*py.log10(mdata.fdData[peaks,2]),'o')
+#    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
+#    myana.doCalculation()
+#    myana.plotRefractiveIndex(1,1)
+#    inits=myana.calculateinits(myana.H,myana.l_opt)
+#    py.figure(1)
+##    py.plot(myana.n[:,0].real/1e9,myana.n[:,1])
+#    py.plot(myana.n[:,0].real/1e9,inits[0])
+#    py.legend(('full H','Initial Conditions'))
+#    
+#    py.figure(2)
+##    py.plot(myana.n[:,0].real/1e9,myana.n[:,1])
+#    py.plot(myana.n[:,0].real/1e9,inits[1])
+#    py.legend(('full H','Initial Conditions'))
     
-#    l3=mdata.findAbsorptionLines()
- 
- 
-    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
-#    myana.calculaten(mdata.fdData,thickness)
-#    mdata.doPlot()
-#    myana.plotInits(myana.H,thickness)
-#    myana.plotInits(myana.H_firstPuls,thickness)
-#    myana.H.doPlot()
-#    myana.H_firstPuls.doPlot()
-#
-#    myana.plotInits(mdata.fdData,thickness)
-    myana.doCalculation()
-    myana.plotRefractiveIndex(1,1)
-#    myana.saveResults()
-   
