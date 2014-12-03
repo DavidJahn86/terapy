@@ -651,13 +651,14 @@ if __name__=="__main__":
         samtd=ImportInrimData(samfiles)
 
 #    #initialize the fd_data objects
-            
+    ref_fd=FdData(reftd)        
     sam_fd=FdData(samtd)
 #    #initialize the mdata object (H,and so on)
     mdata=HMeas(ref_fd,sam_fd)
     mdata.manipulateFDData(-1e9,[200e9,2.2e12])
-    mdata.findAbsorptionLines()
-    
+    peaks=mdata.findAbsorptionLines()
+    py.plot(mdata.getfreqsGHz(),20*py.log10(mdata.fdData[:,2]))
+    py.plot(mdata.getfreqsGHz()[peaks],20*py.log10(mdata.fdData[peaks,2]),'o')
 #    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
 #    myana.doCalculation()
 #    myana.plotRefractiveIndex(1,1)

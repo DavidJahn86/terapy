@@ -438,19 +438,14 @@ class FdData():
         
     def findAbsorptionLines(self):
         #no interpolation here, just return the measured data peak index
-        tresh=8 #db treshhold to detect a line
+        tresh=6 #db treshhold to detect a line
         #filter first
     
         #bring to logarithmic scale
-        hlog=20*py.log10(self.fdData[:,2])
-        
-#        window_size=int(self.getEtalonSpacing()/self.getfbins())
-#        window_size+=window_size%2+1
-#        window=py.ones(int(window_size))/float(window_size)
-#        hlog=py.convolve(20*py.log10(self.fdData[:,2].real), window, 'valid')
-#        one=py.ones((window_size-1)/2,)
-#        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
-#        #remove etalon minima
+        movav=self.getmovingAveragedData()        
+        hlog=20*py.log10(movav[:,2])
+        #smooth data
+          #remove etalon minima
         ixlines_prob=signal.argrelmin(hlog)[0]
         ixlines=[]
         ixmax=signal.argrelmax(hlog)[0]        
@@ -479,17 +474,18 @@ class FdData():
         
         #remove inappropriate lines (by distance so far, at least 5 datapoints!
         ixlines=py.asarray(ixlines)
-        dix=py.diff(ixlines)        
-        while len(dix[dix<6])>0:
-            if hlog[ixlines[i]]<hlog[ixlines[i+1]]:
-                    ixlines[i]=-1
-        
-        ixlines=ixlines[dix>5]
-        f=self.getfreqsGHz()
-        py.plot(f,hlog)
-        py.plot(f[ixlines],hlog[ixlines],'+')        
-        return f[ixlines],ixlines
+        ixlines=py.concatenate(([ixlines[0]],ixlines[py.diff(ixlines)>5]))
+        return ixlines
     
+    def findAbsorptionPeaks_TESTING(self):
+#        movav=self.getmovingAveragedData()        
+        hlog=-20*py.log10(self.fdData[:,2])
+        etalon=myFDData.getEtalonSpacing()
+        Ns=int(etalon/myFDData.getfbins())
+        Ns=py.arange(max(1,Ns-10),Ns+10,1)        
+        peaks=signal.find_peaks_cwt((hlog),Ns)
+        return peaks
+        
     def getEtalonSpacing(self):
         #how to find a stable range! ? 
 #        etalonData=self.getFilteredData(20e9,3)
@@ -517,6 +513,9 @@ class FdData():
         #for the length algorithm
         #it should be of the order of typical absorption line widthes for their analysis
         #remove etalon minima
+        
+        #what happens if the savgol filter is applied to real and imaginary part of the fft?!        
+        #maybe nice to check?!
         fbins=self.getfbins()
         #100e9 should be replaced by the Etalon frequency 
         N_min=int(windowlen/fbins)
@@ -526,6 +525,23 @@ class FdData():
         phdata=signal.savgol_filter(self.fdData[:,3],N_min-N_min%2+1,order)
        
         return py.column_stack((self.fdData[:,0],self.fdData[:,1],absdata,phdata,self.fdData[:,4:]))
+    
+    def getmovingAveragedData(self,window_size_GHz=-1):
+        #so far unelegant way of convolving the columns one by one
+        if window_size_GHz<0.5e9:
+            window_size=int(self.getEtalonSpacing()/self.getfbins())
+        else:
+            window_size=int(window_size_GHz/self.getfbins())
+              
+        window_size+=window_size%2+1
+        window=py.ones(int(window_size))/float(window_size)
+
+        dataabs=py.convolve(self.fdData[:,2], window, 'valid')
+        dataph=py.convolve(self.fdData[:,2], window, 'valid')
+        one=py.ones((window_size-1)/2,)
+        dataabs=py.concatenate((dataabs[0]*one,dataabs,dataabs[-1]*one))
+        dataph=py.concatenate((dataph[0]*one,dataph,dataph[-1]*one))
+        return py.column_stack((self.fdData[:,0],self.fdData[:,1],dataabs,dataph,self.fdData[:,4:]))
     
     def doPlot(self):
 
@@ -540,13 +556,19 @@ class FdData():
 if __name__=='__main__':
     import glob
     path2='/home/jahndav/Dropbox/THz-Analysis/'    
-    samfiles=glob.glob(path2+'MarburgData/*_Lact3*')
+    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
 #    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sam*')
  
     myTDData=ImportMarburgData(samfiles)
 
     myFDData=FdData(myTDData)
-    myFDData.findAbsorptionLines()
+#    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
+    peaks=myFDData.findAbsorptionLines()
+#    peaksS=myFDData.findAbsorptionPeaks_TESTING()
+    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
+    py.plot(myFDData.getfreqsGHz()[peaks],myFDData.fdData[peaks,2],'x')
+#    py.plot(myFDData.getfreqsGHz()[peaksS],myFDData.fdData[peaksS,2],'*')
+    
 #    myFDData.setFDData(myFDData.getcroppedData(myFDData.fdData,200e9,2200e9))
 #    etalon=myFDData.getEtalonSpacing()
 #    Ns=int(etalon/myFDData.getfbins())
