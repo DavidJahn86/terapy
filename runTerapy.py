@@ -2,6 +2,7 @@
 
 import argparse
 import pylab
+import glob
 import Terapy
 import TeraData
 
@@ -15,14 +16,29 @@ parser.add_argument('--ireference','-ir',nargs='*',help='list of reference filen
 parser.add_argument('--mode','-m',type=str,default='INRIM',choices=['INRIM','Marburg','lucastestformat'],help='format of the datafiles')
 parser.add_argument('--thickness','-t',type=float,help='sample thickness')
 parser.add_argument('--savePlots','-s',action='store_false',help='turn off saving TD and FD plots')
-
+parser.add_argument('--workpath','-w',type=str,default='./',help='specify a base folder')
 args = parser.parse_args()
 
-reffiles=args.ireference
-samfiles=args.isample
+ireffiles=args.ireference
+isamfiles=args.isample
 mode=args.mode
 thickness=args.thickness
+basefolder=args.workpath        
 
+reffiles=[]
+samfiles=[]
+
+for i in range(len(ireffiles)):
+    tf=glob.glob(basefolder+ireffiles[i])   
+    reffiles+=tf
+
+for i in range(len(isamfiles)):
+    tf=glob.glob(basefolder+isamfiles[i])
+    samfiles+=tf
+
+print reffiles
+print samfiles
+        
 if mode=='lucastestformat':
     reftd=TeraData.THzTdData(reffiles)
     samtd=TeraData.THzTdData(samfiles)
@@ -61,7 +77,7 @@ if args.savePlots:
     reftd.doPlotWithunc()
     samtd.doPlotWithunc()
     pylab.legend(('Reference','Sample'))
-    pylab.savefig(args.outname + 'Time-Domain.png')
+    pylab.savefig(args.workpath+args.outname + 'Time-Domain.png')
     pylab.close()
     
     ref_fd.doPlot()
@@ -72,14 +88,14 @@ if args.savePlots:
     pylab.close()
     pylab.figure('FD-PHASE-Plot')
     pylab.legend(('Reference','Sample'))
-    pylab.savefig(args.outname + 'PHASE-Frequency-Domain.png')
+    pylab.savefig(args.workpath+args.outname + 'PHASE-Frequency-Domain.png')
     pylab.close()
     
     mdata.doPlot()
-    pylab.savefig(args.outname + 'TransferFunction.png')
+    pylab.savefig(args.workpath+args.outname + 'TransferFunction.png')
     pylab.close()
 #
-myana.plotRefractiveIndex(1,1,args.outname)
-myana.saveResults(args.outname)
+myana.plotRefractiveIndex(1,1,args.workpath+args.outname)
+myana.saveResults(args.workpath+args.outname)
 #
 pylab.show()
