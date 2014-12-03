@@ -421,6 +421,9 @@ class FdData():
         if self._tdData.numberOfDataSets<=1:
             repeat_noise_imag=0
             repeat_noise_real=0
+            repeat_noise_abs=0
+            repeat_noise_ph=0
+            
         else:
             a=py.fft(commonTdData[:,:,1],axis=1)
             b=abs(a)
