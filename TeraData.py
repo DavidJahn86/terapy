@@ -1,6 +1,7 @@
 import pylab as py
 from scipy.interpolate import interp1d
 import scipy.signal as signal
+import sys
 from uncertainties import unumpy
 
 class THzTdData():
@@ -86,14 +87,18 @@ class THzTdData():
     def importfile(self,fname,params):
         # if even more sophisticated things are needed, just inherit THzTdData class
         #and override the importfile method
-        
-        if params[3]=='.':
-            data=py.loadtxt(fname,usecols=(params[1],params[2]))
-        elif params[3]==',':
-            str2float=lambda val: float(val.replace(',','.'))
-            data=py.loadtxt(fname,
-            converters={params[1]:str2float,params[2]:str2float},
-            usecols=(params[1],params[2]),skiprows=params[4])                
+        try:
+            if params[3]=='.':
+                data=py.loadtxt(fname,usecols=(params[1],params[2]))
+            elif params[3]==',':
+                str2float=lambda val: float(val.replace(',','.'))
+                data=py.loadtxt(fname,
+                converters={params[1]:str2float,params[2]:str2float},
+                usecols=(params[1],params[2]),skiprows=params[4])                
+        except IOError:
+            print "File " + fname + " could not be loaded"
+            sys.exit()
+
         data[:,0]*=params[0]
         
         if data[1,0]-data[0,0]<0:

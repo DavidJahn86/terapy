@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import sys
 import pylab
 import glob
 import Terapy
@@ -36,6 +37,14 @@ for i in range(len(isamfiles)):
     tf=glob.glob(basefolder+isamfiles[i])
     samfiles+=tf
 
+if len(reffiles)==0:
+    print "no Reference File specified"
+    sys.exit()
+    
+if len(samfiles)==0:
+    print "no Sample File specified"
+    sys.exit()
+        
 if mode=='lucastestformat':
     reftd=TeraData.THzTdData(reffiles)
     samtd=TeraData.THzTdData(samfiles)
@@ -47,7 +56,6 @@ if mode=='Marburg':
 if mode=='INRIM':
     reftd=TeraData.ImportInrimData(reffiles)
     samtd=TeraData.ImportInrimData(samfiles)
-
 
 #    #initialize the fd_data objects        
 ref_fd=TeraData.FdData(reftd)
