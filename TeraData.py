@@ -1,6 +1,7 @@
 import pylab as py
 from scipy.interpolate import interp1d
 import scipy.signal as signal
+from uncertainties import unumpy
 
 class THzTdData():
 
@@ -181,7 +182,7 @@ class THzTdData():
         return self.filename
     
     def getDR(self):
-        Emax=max(abs(self.tdData[:,1]))
+        Emax=abs(self.tdData[:,1])
         noise=py.sqrt(py.mean(self.getPreceedingNoise()**2))
         return Emax/noise
     
@@ -408,8 +409,12 @@ class FdData():
         #make sure, that no interpolated or zero padded data is used for calculating the 
         #freqeuncy uncertainty, not nice style!
         commonTdData=self._tdData._bringToCommonTimeAxis(self._tdData._thzdata_raw)
+        dfreq=py.fftfreq(len(commonTdData[0][:,0]),commonTdData[0][5,0]-commonTdData[0][4,0])
+            
         noise_real=py.std(precNoise.real)*py.ones(commonTdData[0][:,0].shape)
         noise_imag=py.std(precNoise.imag)*py.ones(commonTdData[0][:,0].shape)
+        noise_abs=py.std(abs(precNoise))*py.ones(commonTdData[0][:,0].shape)
+        noise_ph=py.std(py.angle(precNoise))*py.ones(commonTdData[0][:,0].shape)
         
         
         #second calculate variation between measurements
@@ -418,15 +423,24 @@ class FdData():
             repeat_noise_real=0
         else:
             a=py.fft(commonTdData[:,:,1],axis=1)
+            b=abs(a)
+            c=[]
+            for i in range(self._tdData.numberOfDataSets):
+                c.append(self.removePhaseOffset(py.column_stack((dfreq,py.unwrap(py.angle(a[i,:]))))))
+            c=py.asarray(c)
+            
+            repeat_noise_abs=py.std(b,axis=0)
+            repeat_noise_ph=py.std(c,axis=0)
             repeat_noise_real=py.std(a.real,axis=0)
             repeat_noise_imag=py.std(a.imag,axis=0)
        
-        dfreq=py.fftfreq(len(commonTdData[0][:,0]),commonTdData[0][5,0]-commonTdData[0][4,0])
         t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real**2),py.sqrt(noise_imag**2+repeat_noise_imag**2)))
+        t=py.column_stack((t,py.sqrt(noise_abs**2+repeat_noise_abs**2),py.sqrt(noise_ph**2+repeat_noise_ph**2)))        
         return self.getcroppedData(t)    
     
     def getDR(self):
-        noiselevel=py.mean(abs(py.fft(self._tdData.getPreceedingNoise())))
+        
+        noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getPreceedingNoise()))**2))
         window_size=5
         window=py.ones(int(window_size))/float(window_size)
         hlog=py.convolve(20*py.log10(self.fdData[:,2].real), window, 'valid')
@@ -434,6 +448,9 @@ class FdData():
         hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
         return hlog-20*py.log10(noiselevel)         
     
+    def getSNR(self):
+        return self.fdData[:,2]/self.fdData[:,6]
+        
     def getBandwidth(self,dbDistancetoNoise=15):
         #this function should return the lowest trustable and highest trustable frequency, 
         # along with the resulting bandwidth
@@ -559,7 +576,22 @@ class FdData():
         py.ylabel('Amplitude, arb. units')
         
         py.figure('FD-PHASE-Plot')
-        py.plot(self.getfreqsGHz(),self.fdData[:,3].real)                
+        py.plot(self.getfreqsGHz(),self.fdData[:,3].real)   
+             
+    def doPlotWithUnc(self):
+        f=1
+
+        uabs=unumpy.uarray(self.fdData[:,2].real,self.fdData[:,6].real)
+        uabs=20*unumpy.log10(uabs)
+        u_a=unumpy.nominal_values(uabs)
+        u_s=unumpy.std_devs(uabs)
+        py.figure('FD-ABS-UNC-Plot')
+        py.plot(self.getfreqsGHz(),u_a)
+        py.plot(self.getfreqsGHz(),u_a+u_s,'--',self.getfreqsGHz(),u_a-u_s,'--')
+
+        py.figure('FD-PH-UNC-Plot')
+        py.plot(self.getfreqsGHz(),self.fdData[:,3])
+        py.plot(self.getfreqsGHz(),self.fdData[:,3]+f*self.fdData[:,7],'--',self.getfreqsGHz(),self.fdData[:,3]-f*self.fdData[:,7],'--')
 
 if __name__=='__main__':
     import glob
@@ -570,11 +602,12 @@ if __name__=='__main__':
     myTDData=ImportMarburgData(samfiles)
 
     myFDData=FdData(myTDData)
+    myFDData.doPlotWithUnc()
 #    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
-    peaks=myFDData.findAbsorptionLines()
+#    peaks=myFDData.findAbsorptionLines()
 #    peaksS=myFDData.findAbsorptionPeaks_TESTING()
-    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
-    py.plot(myFDData.getfreqsGHz()[peaks],myFDData.fdData[peaks,2],'x')
+#    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
+#    py.plot(myFDData.getfreqsGHz()[peaks],myFDData.fdData[peaks,2],'x')
 #    py.plot(myFDData.getfreqsGHz()[peaksS],myFDData.fdData[peaksS,2],'*')
     
 #    myFDData.setFDData(myFDData.getcroppedData(myFDData.fdData,200e9,2200e9))
