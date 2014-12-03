@@ -457,7 +457,7 @@ class FdData():
         return hlog-20*py.log10(noiselevel)         
     
     def getSNR(self):
-        return self.fdData[:,2]/self.fdData[:,6]
+        return self.fdData[:,2].real/self.fdData[:,6].real
         
     def getBandwidth(self,dbDistancetoNoise=15):
         #this function should return the lowest trustable and highest trustable frequency, 

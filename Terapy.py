@@ -2,6 +2,7 @@ import pylab as py
 import copy
 import glob
 import os
+from uncertainties import unumpy
 from scipy.interpolate import interp1d
 from scipy.constants import c
 from scipy.optimize import minimize
@@ -77,8 +78,14 @@ class HMeas(FdData):
         H_unc_imag2+=(self.fdsam.fdData[:,5]*dgdb(py.asarray([ta,tb,tc,td])))**2
         H_unc_imag2+=(self.fdref.fdData[:,4]*dgdc(py.asarray([ta,tb,tc,td])))**2
         H_unc_imag2+=(self.fdref.fdData[:,5]*dgdd(py.asarray([ta,tb,tc,td])))**2
-                
-        return py.sqrt(H_unc_real2),py.sqrt(H_unc_imag2)
+        absEsam=unumpy.uarray(self.fdsam.fdData[:,2].real,self.fdsam.fdData[:,6].real)
+        Ephsam=unumpy.uarray(self.fdsam.fdData[:,3].real,self.fdsam.fdData[:,7].real)
+        absEref=unumpy.uarray(self.fdref.fdData[:,2].real,self.fdref.fdData[:,6].real)
+        Ephref=unumpy.uarray(self.fdref.fdData[:,3].real,self.fdref.fdData[:,7].real)
+  
+        H_uncabs=unumpy.std_devs(absEsam/absEref)
+        H_uncph=unumpy.std_devs(Ephsam-Ephref)
+        return py.column_stack((py.sqrt(H_unc_real2),py.sqrt(H_unc_imag2),H_uncabs,H_uncph))
     
     def _checkDataIntegrity(self):
         tdrefData=self.fdref.getassTDData()
@@ -144,13 +151,13 @@ class HMeas(FdData):
             print(prob_str)
             self.interpolateData(prob_str)
         
-        H_unc_real,H_unc_imag=self.calculateSTDunc()
+        H_unc=self.calculateSTDunc()
             #take care that abs(H) is always smaller one!
             #try if this increases the data quality!
 #            H_ph=py.unwrap(py.angle(self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]))
         H_ph=self.fdref.getUnwrappedPhase()-self.fdsam.getUnwrappedPhase()
         H=self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]
-        H=py.column_stack((self.fdref.fdData[:,0],H,abs(H),H_ph,H_unc_real,H_unc_imag))
+        H=py.column_stack((self.fdref.fdData[:,0],H,abs(H),H_ph,H_unc))
         return H    
     
     def doPlot(self):
@@ -403,6 +410,8 @@ class teralyz():
 
         
     def doCalculation(self,bool_findl=1,n_SVMAFS=5,bool_silent=0):
+        bw=self.H.getBandwidth()
+        self.H.manipulateFDData(-1,[bw[0]+50e9,bw[1]-200e9])
         if bool_findl:
             self.l_opt=self.findLintelli()
 

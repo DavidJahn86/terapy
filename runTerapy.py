@@ -65,10 +65,9 @@ sam_fd=TeraData.FdData(samtd)
 
 mdata=Terapy.HMeas(ref_fd,sam_fd)
 
-mdata.manipulateFDData(-11e9,[200e9,2.2e12])
+#mdata.manipulateFDData(-11e9,[200e9,2.2e12])
 
 myana=Terapy.teralyz(mdata,thickness,20e-6,30)
-#myana.plotInits(mdata.H,thickness)
 myana.doCalculation(args.calcLength,args.noSVMAF,args.silent)
 
 
