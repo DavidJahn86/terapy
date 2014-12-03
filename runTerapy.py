@@ -36,9 +36,6 @@ for i in range(len(isamfiles)):
     tf=glob.glob(basefolder+isamfiles[i])
     samfiles+=tf
 
-print reffiles
-print samfiles
-        
 if mode=='lucastestformat':
     reftd=TeraData.THzTdData(reffiles)
     samtd=TeraData.THzTdData(samfiles)
