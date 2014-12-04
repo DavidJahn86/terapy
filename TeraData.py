@@ -513,11 +513,33 @@ class FdData():
     def findAbsorptionPeaks_TESTING(self):
 #        movav=self.getmovingAveragedData()        
         hlog=-20*py.log10(self.fdData[:,2])
-        etalon=myFDData.getEtalonSpacing()
-        Ns=int(etalon/myFDData.getfbins())
+        etalon=self.getEtalonSpacing()
+        Ns=int(etalon/self.getfbins())
         Ns=py.arange(max(1,Ns-10),Ns+10,1)        
         peaks=signal.find_peaks_cwt((hlog),Ns)
         return peaks
+        
+    def fitAbsorptionLines(self):
+        #this method should fit the absorption lines and return fwhm, depth 
+        peaks=self.findAbsorptionLines()
+        #naive idea: use always 1/n of the space between two peaks for cutting:
+        peakfreqs=self.getfreqs()[peaks]
+        #first and last one are special
+        #first one:
+        if len(peaks)==0:
+            #nothing to do 
+            return 0
+        
+        #if len(peaks)==1:
+            #there is only one
+            
+        #if len(peaks)==2:
+            
+        #if len(peaks)>2:
+        #(peakfreqs[1]-peakfreqs[0])
+                
+        
+        
         
     def getEtalonSpacing(self):
         #how to find a stable range! ? 
@@ -609,8 +631,8 @@ if __name__=='__main__':
  
     myTDData=ImportMarburgData(samfiles)
 
-    myFDData=FdData(myTDData)
-    myFDData.doPlotWithUnc()
+#    myFDData=FdData(myTDData)
+#    myFDData.doPlotWithUnc()
 #    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
 #    peaks=myFDData.findAbsorptionLines()
 #    peaksS=myFDData.findAbsorptionPeaks_TESTING()
