@@ -398,10 +398,10 @@ class teralyz():
 
         for i in range(nums):
             
-            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:2],l), method='SLSQP',\
-            bounds=bnds, options={'ftol':1e-9,'maxiter':2000, 'disp': False})
-#            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:],l), method='Nelder-Mead',
-#            options={'xtol': 1e-6,'disp':False})
+#            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:2],l), method='SLSQP',\
+#            bounds=bnds, options={'ftol':1e-9,'maxiter':2000, 'disp': False})
+            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:2],l), method='Nelder-Mead',
+            options={'xtol': 1e-6,'disp':False})
             res.append(t.x[0]-1j*t.x[1])
             vals.append(t.fun)
         n=py.asarray(res)
@@ -461,7 +461,7 @@ class teralyz():
         savetofile=py.column_stack((
         self.n[:,0].real,
         self.n[:,1].real,self.n[:,1].imag, #the real and imaginary part of n
-        self.n[:,2].real,self.n[:,2].imag, #the real and imaginary part of the smoothed n
+        self.n[:,2].real,-self.n[:,2].imag, #the real and imaginary part of the smoothed n
         self.H.fdData[:,1].real,self.H.fdData[:,1].imag,#H_measured
         self.H.fdData[:,4].real,self.H.fdData[:,5].real,#uncertainties
         self.H.fdData[:,2].real,self.H.fdData[:,3].real,#absH,ph H measured    

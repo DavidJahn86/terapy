@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import time
 import argparse
 import sys
 import pylab
@@ -20,6 +20,7 @@ parser.add_argument('--savePlots','-s',action='store_false',help='turn off savin
 parser.add_argument('--workpath','-w',type=str,default='./',help='specify a base folder')
 args = parser.parse_args()
 
+starttime=time.time()
 ireffiles=args.ireference
 isamfiles=args.isample
 mode=args.mode
@@ -102,4 +103,6 @@ if args.savePlots:
 myana.plotRefractiveIndex(1,1,args.workpath+args.outname)
 myana.saveResults(args.workpath+args.outname)
 #
+endtime=time.time()
+print "Consumed Time: " + str(endtime-starttime)
 pylab.show()
