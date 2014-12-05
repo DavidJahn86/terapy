@@ -17,7 +17,7 @@ parser.add_argument('--ireference','-ir',nargs='*',help='list of reference filen
 parser.add_argument('--mode','-m',type=str,default='INRIM',choices=['INRIM','Marburg','lucastestformat'],help='format of the datafiles')
 parser.add_argument('--thickness','-t',type=float,help='sample thickness')
 parser.add_argument('--savePlots','-s',action='store_false',help='turn off saving TD and FD plots')
-parser.add_argument('--workpath','-w',type=str,default='./',help='specify a base folder')
+parser.add_argument('--workpath','-w',type=str,default='',help='specify a base folder')
 args = parser.parse_args()
 
 starttime=time.time()
