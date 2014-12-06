@@ -318,8 +318,12 @@ class FdData():
         self.maxDR=max(self.getDR())
 
     def getInterpolatedFDData(self,newfbins,strmode='linear'):
+        #not only for this function, also for others maybe useful: 
+        #check if it is possible to give as an argument a slice, i.e.
+        # '1:' for interpolating all data, '3' for only the absdata and so on 
         oldfreqs=self.getfreqs()
         newfreqs=py.arange(min(oldfreqs),max(oldfreqs),newfbins)
+        
         interfdData=interp1d(oldfreqs,self.fdData[:,1:],strmode,axis=0)
         
         return py.column_stack((newfreqs,interfdData(newfreqs)))
@@ -363,22 +367,20 @@ class FdData():
         return data[ix,:]
     
     def getfbins(self):
+        #this is ok
         return abs(self.fdData[1,0]-self.fdData[0,0])
     
     def getfreqs(self):
-        return self.fdData[:,0].real
+        return self.fdData[:,0]
 
     def getfreqsGHz(self):
         return self.getfreqs()*1e-9         
     
     def getmaxfreq(self):
-        #take care of constant offset
+        #take care of constant offset what is the best lower range?
         cutted=self.getcroppedData(self.fdData,150e9,FdData.FMAX)
         fmax=cutted[py.argmax(cutted[:,2]),0]
         return fmax
-        
-    def getUnwrappedPhase(self):        
-        return self.fdData[:,3]
     
     def calculatefdData(self,tdData):
         #this could also be avoided, since it doesn't change in most of the cases
@@ -391,11 +393,11 @@ class FdData():
         fdph=abs(py.unwrap(py.angle(fd)))
         dfreq=py.fftfreq(tdData.num_points,tdData.dt)                
         fdph=self.removePhaseOffset(py.column_stack((dfreq,fdph)))
-        t=py.column_stack((dfreq,fd,fdabs,fdph))
+        t=py.column_stack((dfreq,fd.real,fd.imag,fdabs,fdph))
         t=self.getcroppedData(t,0,unc[-1,0])
         intpunc=interp1d(unc[:,0],unc[:,1:],axis=0)        
         unc=intpunc(t[:,0])
-        return py.column_stack((t[:,:4],unc))
+        return py.column_stack((t,unc))
     
     def removePhaseOffset(self,ph):
         #cut data to reasonable range:
@@ -451,21 +453,21 @@ class FdData():
         noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getPreceedingNoise()))**2))
         window_size=5
         window=py.ones(int(window_size))/float(window_size)
-        hlog=py.convolve(20*py.log10(self.fdData[:,2].real), window, 'valid')
+        hlog=py.convolve(20*py.log10(self.getFAbs()), window, 'valid')
         one=py.ones((2,))
         hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
         return hlog-20*py.log10(noiselevel)         
     
     def getSNR(self):
-        return self.fdData[:,2].real/self.fdData[:,6].real
+        return self.getFAbs()/self.getFAbsUnc()
         
     def getBandwidth(self,dbDistancetoNoise=15):
         #this function should return the lowest trustable and highest trustable frequency, 
         # along with the resulting bandwidth
         
-        absdata=-20*py.log10(self.fdData[:,2]/max(self.fdData[:,2]))
+        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
         ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
-        tfr=self.fdData[ix,0]
+        tfr=self.getfreqs()[ix]
 
         return min(tfr),max(tfr)
         
@@ -512,7 +514,7 @@ class FdData():
     
     def findAbsorptionPeaks_TESTING(self):
 #        movav=self.getmovingAveragedData()        
-        hlog=-20*py.log10(self.fdData[:,2])
+        hlog=-20*py.log10(self.getFAbs())
         etalon=self.getEtalonSpacing()
         Ns=int(etalon/self.getfbins())
         Ns=py.arange(max(1,Ns-10),Ns+10,1)        
@@ -537,19 +539,17 @@ class FdData():
             
         #if len(peaks)>2:
         #(peakfreqs[1]-peakfreqs[0])
-                
-        
-        
-        
+   
+    
     def getEtalonSpacing(self):
         #how to find a stable range! ? 
 #        etalonData=self.getFilteredData(20e9,3)
         bw=self.getBandwidth()
-        rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],3e12))  
+        rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],2.1e12))  
         #get etalon frequencies:
         #need to interpolate data!
-        oldfreqs=rdata[:,0].real       
-        intpdata=interp1d(oldfreqs,rdata[:,2],'cubic')
+        oldfreqs=rdata[:,0]
+        intpdata=interp1d(oldfreqs,rdata[:,3],'cubic')
         
         fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
         absnew=intpdata(fnew)
@@ -576,10 +576,10 @@ class FdData():
         N_min=int(windowlen/fbins)
         order=min(N_min-1,maxorder)
         
-        absdata=signal.savgol_filter(self.fdData[:,2],N_min-N_min%2+1,order)
-        phdata=signal.savgol_filter(self.fdData[:,3],N_min-N_min%2+1,order)
+        absdata=signal.savgol_filter(self.getFAbs(),N_min-N_min%2+1,order)
+        phdata=signal.savgol_filter(self.getFAbs(),N_min-N_min%2+1,order)
        
-        return py.column_stack((self.fdData[:,0],self.fdData[:,1],absdata,phdata,self.fdData[:,4:]))
+        return py.column_stack((self.fdData[:,:3],absdata,phdata,self.fdData[:,5:]))
     
     def getmovingAveragedData(self,window_size_GHz=-1):
         #so far unelegant way of convolving the columns one by one
@@ -591,47 +591,72 @@ class FdData():
         window_size+=window_size%2+1
         window=py.ones(int(window_size))/float(window_size)
 
-        dataabs=py.convolve(self.fdData[:,2], window, 'valid')
-        dataph=py.convolve(self.fdData[:,2], window, 'valid')
+        dataabs=py.convolve(self.getFAbs(), window, 'valid')
+        dataph=py.convolve(self.getFPh(), window, 'valid')
         one=py.ones((window_size-1)/2,)
         dataabs=py.concatenate((dataabs[0]*one,dataabs,dataabs[-1]*one))
         dataph=py.concatenate((dataph[0]*one,dataph,dataph[-1]*one))
-        return py.column_stack((self.fdData[:,0],self.fdData[:,1],dataabs,dataph,self.fdData[:,4:]))
+        return py.column_stack((self.fdData[:,:3],dataabs,dataph,self.fdData[:,5:]))
     
     def doPlot(self):
 
         py.figure('FD-ABS-Plot')
-        py.plot(self.getfreqsGHz(),20*py.log10(abs(self.fdData[:,2])))
+        py.plot(self.getfreqsGHz(),20*py.log10(self.getFAbs()))
         py.xlabel('Frequency in GHz')
         py.ylabel('Amplitude, arb. units')
         
         py.figure('FD-PHASE-Plot')
-        py.plot(self.getfreqsGHz(),self.fdData[:,3].real)   
+        py.plot(self.getfreqsGHz(),self.getFPh())   
              
     def doPlotWithUnc(self):
         f=1
 
-        uabs=unumpy.uarray(self.fdData[:,2].real,self.fdData[:,6].real)
+        uabs=unumpy.uarray(self.getFAbs(),self.getFAbsUnc())
+        #scale the uncertainty for the 20*log10 plot
         uabs=20*unumpy.log10(uabs)
         u_a=unumpy.nominal_values(uabs)
         u_s=unumpy.std_devs(uabs)
+        
         py.figure('FD-ABS-UNC-Plot')
         py.plot(self.getfreqsGHz(),u_a)
         py.plot(self.getfreqsGHz(),u_a+u_s,'--',self.getfreqsGHz(),u_a-u_s,'--')
 
         py.figure('FD-PH-UNC-Plot')
-        py.plot(self.getfreqsGHz(),self.fdData[:,3])
-        py.plot(self.getfreqsGHz(),self.fdData[:,3]+f*self.fdData[:,7],'--',self.getfreqsGHz(),self.fdData[:,3]-f*self.fdData[:,7],'--')
+        py.plot(self.getfreqsGHz(),self.getFPh())
+        py.plot(self.getfreqsGHz(),self.getFPh()+f*self.getFPhUnc(),'--',self.getfreqsGHz(),self.getFPh()+self.getFPhUnc(),'--')
+
+    def getFReal(self):
+        return self.fdData[:,1]
+    def getFImag(self):
+        return self.fdData[:,2]
+    def getFAbs(self):
+        return self.fdData[:,3]
+    def getFPh(self):
+        return self.fdData[:,4]
+    def getFRealUnc(self):
+        return self.fdData[:,5]
+    def getFImagUnc(self):
+        return self.fdData[:,6]
+    def getFAbsUnc(self):
+        #maybe the calculation can also be done here, since it is not needed often
+        return self.fdData[:,7]
+    
+    def getFPhUnc(self):
+        return self.fdData[:,8]
+    
+    def getLength(self):
+        return self.fdData.shape[0]
 
 if __name__=='__main__':
     import glob
     path2='/home/jahndav/Dropbox/THz-Analysis/'    
 #    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
-    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sam*')
+    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sample_?.txt')
  
     myTDData=ImportMarburgData(samfiles)
 
-#    myFDData=FdData(myTDData)
+    myFDData=FdData(myTDData)
+    myFDData.getEtalonSpacing()
 #    myFDData.doPlotWithUnc()
 #    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
 #    peaks=myFDData.findAbsorptionLines()

@@ -52,6 +52,8 @@ class HMeas(FdData):
         self.calculatefdData()
     
     def calculateSTDunc(self):  
+        #this function should give the same result as using uncertainty package with the previously
+        #correctly calculated uncertainties of reference and sample measurements
         #x=[a,b,c,d]
         dfda=lambda x: x[2]/(x[2]**2+x[3]**2)
         dfdb=lambda x: x[3]/(x[2]**2+x[3]**2)
@@ -64,24 +66,24 @@ class HMeas(FdData):
         dgdd=lambda x: (x[0]*x[3]**2-x[0]*x[2]**2-2*x[1]*x[2]*x[3])/(x[2]**2+x[3]**2)**2
 
         
-        ta=self.fdsam.fdData[:,1].real
-        tb=self.fdsam.fdData[:,1].imag
-        tc=self.fdref.fdData[:,1].real
-        td=self.fdref.fdData[:,1].imag
+        ta=self.fdsam.getFReal()
+        tb=self.fdsam.getFImag()
+        tc=self.fdref.getFReal()
+        td=self.fdref.getFImag()
         
-        H_unc_real2=(self.fdsam.fdData[:,4]*dfda(py.asarray([ta,tb,tc,td])))**2
-        H_unc_real2+=(self.fdsam.fdData[:,5]*dfdb(py.asarray([ta,tb,tc,td])))**2
-        H_unc_real2+=(self.fdref.fdData[:,4]*dfdc(py.asarray([ta,tb,tc,td])))**2
-        H_unc_real2+=(self.fdref.fdData[:,5]*dfdd(py.asarray([ta,tb,tc,td])))**2
+        H_unc_real2=(self.fdsam.getFRealUnc()*dfda(py.asarray([ta,tb,tc,td])))**2
+        H_unc_real2+=(self.fdsam.getFImagUnc()*dfdb(py.asarray([ta,tb,tc,td])))**2
+        H_unc_real2+=(self.fdref.getFRealUnc()*dfdc(py.asarray([ta,tb,tc,td])))**2
+        H_unc_real2+=(self.fdref.getFImagUnc()*dfdd(py.asarray([ta,tb,tc,td])))**2
         
-        H_unc_imag2=(self.fdsam.fdData[:,4]*dgda(py.asarray([ta,tb,tc,td])))**2
-        H_unc_imag2+=(self.fdsam.fdData[:,5]*dgdb(py.asarray([ta,tb,tc,td])))**2
-        H_unc_imag2+=(self.fdref.fdData[:,4]*dgdc(py.asarray([ta,tb,tc,td])))**2
-        H_unc_imag2+=(self.fdref.fdData[:,5]*dgdd(py.asarray([ta,tb,tc,td])))**2
-        absEsam=unumpy.uarray(self.fdsam.fdData[:,2].real,self.fdsam.fdData[:,6].real)
-        Ephsam=unumpy.uarray(self.fdsam.fdData[:,3].real,self.fdsam.fdData[:,7].real)
-        absEref=unumpy.uarray(self.fdref.fdData[:,2].real,self.fdref.fdData[:,6].real)
-        Ephref=unumpy.uarray(self.fdref.fdData[:,3].real,self.fdref.fdData[:,7].real)
+        H_unc_imag2=(self.fdsam.getFRealUnc()*dgda(py.asarray([ta,tb,tc,td])))**2
+        H_unc_imag2+=(self.fdsam.getFImagUnc()*dgdb(py.asarray([ta,tb,tc,td])))**2
+        H_unc_imag2+=(self.fdref.getFRealUnc()*dgdc(py.asarray([ta,tb,tc,td])))**2
+        H_unc_imag2+=(self.fdref.getFImagUnc()*dgdd(py.asarray([ta,tb,tc,td])))**2
+        absEsam=unumpy.uarray(self.fdsam.getFAbs(),self.fdsam.getFAbsUnc())
+        Ephsam=unumpy.uarray(self.fdsam.getFPh(),self.fdsam.getFPhUnc())
+        absEref=unumpy.uarray(self.fdref.getFAbs(),self.fdref.getFAbsUnc())
+        Ephref=unumpy.uarray(self.fdref.getFPh(),self.fdref.getFPhUnc())
   
         H_uncabs=unumpy.std_devs(absEsam/absEref)
         H_uncph=unumpy.std_devs(Ephsam-Ephref)
@@ -102,10 +104,10 @@ class HMeas(FdData):
             abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-16:
             return 'td-Problem-interval'
         
-        if len(self.fdref.fdData[:,1])!= len(self.fdsam.fdData[:,1]):
+        if self.fdref.getLength()!= self.fdsam.getLength():
             return 'fd-Problem-len'
         
-        if not all(self.fdref.fdData[:,0]-self.fdsam.fdData[:,0]<1e6):
+        if not all(self.fdref.getfreqs()-self.fdsam.getfreqs()<1e6):
             return 'fd-Problem-axis'
          #else return       
         return 'good'
@@ -155,33 +157,34 @@ class HMeas(FdData):
             #take care that abs(H) is always smaller one!
             #try if this increases the data quality!
 #            H_ph=py.unwrap(py.angle(self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]))
-        H_ph=self.fdref.getUnwrappedPhase()-self.fdsam.getUnwrappedPhase()
-        H=self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]
-        H=py.column_stack((self.fdref.fdData[:,0],H,abs(H),H_ph,H_unc))
+        H_ph=self.fdref.getFPh()-self.fdsam.getFPh()
+        H=(self.fdsam.getFReal()+1j*self.fdsam.getFImag())/(self.fdref.getFReal()+1j*self.fdref.getFImag())
+        H=py.column_stack((self.fdref.getfreqs(),H.real,H.imag,abs(H),H_ph,H_unc))
         return H    
     
     def doPlot(self):
         freqs=self.getfreqsGHz()
         
         py.figure('H-UNC-Plot')
-        py.plot(freqs,self.fdData[:,1].real)
-        py.plot(freqs,self.fdData[:,1].imag)
-        py.plot(freqs,self.fdData[:,1].real+self.fdData[:,4].real,'g--',freqs,self.fdData[:,1].real-self.fdData[:,4].real,'g--')
-        py.plot(freqs,self.fdData[:,1].imag+self.fdData[:,5].real,'g--',freqs,self.fdData[:,1].imag-self.fdData[:,5].real,'g--')
+        py.plot(freqs,self.getFReal())
+        py.plot(freqs,self.getFImag())
+        py.plot(freqs,self.getFReal()+self.getFRealUnc(),'g--',freqs,self.getFReal()-self.getFRealUnc(),'g--')
+        py.plot(freqs,self.getFImag()+self.getFImagUnc(),'g--',freqs,self.getFImag()-self.getFImagUnc(),'g--')
         py.xlabel('Frequency in GHz')
         py.ylabel('Transfer Function')
         py.legend(('H_real','H_imag'))
 #        
         py.figure('H-PHASE-Plot')
-        py.plot(freqs,self.fdData[:,3])
+        py.plot(freqs,self.getFPh())
        
         py.figure('H-ABS-Plot')
-        py.plot(freqs,self.fdData[:,2])
+        py.plot(freqs,self.getFAbs())
         
     def estimateLDavid(self):
+        #crop frequency axis
         rdata=self.getcroppedData(self.fdData,200e9,1e12)
         #calculate phase change
-        p=py.polyfit(rdata[:,0].real,rdata[:,3].real,1)        
+        p=py.polyfit(rdata[:,0],rdata[:,4],1)        
         kappa=abs(p[0])
 #        py.figure()
 #        py.plot(rdata[:,0],rdata[:,-1])
@@ -253,9 +256,7 @@ class teralyz():
     def error_func(self,n,H,l):
         #we could also introduce constraints on n by artificialy punishing        
         H_t=self.H_theory(H[0],n,l)
-        H_m=H[1]
-
-        return (H_t.real-H_m.real)**2+(H_t.imag-H_m.imag)**2
+        return (H_t.real-H[1])**2+(H_t.imag-H[2])**2
         
     def calculate_no_echos(self,tdsam):
         t_max=tdsam.getTimeWindowLength()
@@ -283,7 +284,6 @@ class teralyz():
         
         calcdata=copy.deepcopy(self.H)
         calcdata.manipulateFDData(-1,[fmax-f_span*1,fmax+f_span*4])
-        
         H_small=calcdata.fdData
         py.figure(33)
         t=minimize(self.errorL,self.userthickness,args=((py.asarray(H_small),)),\
@@ -291,9 +291,10 @@ class teralyz():
         return t.x[0]
         
     def errorL(self,l,H):
+        
         n_small=[self.calculaten(H,l)]
-    
         qs=self.QuasiSpace(n_small,H[1,0]-H[0,0],l)
+        
         tv=self.totalVariation(n_small)
         py.plot(l,qs[0],'+')
         py.plot(l,tv[0],'*')        
@@ -345,10 +346,10 @@ class teralyz():
         H_r=H_smoothed.real
         H_i=H_smoothed.imag
         f=1
-        lb_r=self.H.fdData[:,1].real-self.H.fdData[:,4]*f
-        lb_i=self.H.fdData[:,1].imag-self.H.fdData[:,5]*f
-        ub_r=self.H.fdData[:,1].real+self.H.fdData[:,4]*f
-        ub_i=self.H.fdData[:,1].imag+self.H.fdData[:,5]*f
+        lb_r=self.H.getFReal()-self.H.getFRealUnc()*f
+        lb_i=self.H.getFImag()-self.H.getFImagUnc()*f
+        ub_r=self.H.getFReal()+self.H.getFRealUnc()*f
+        ub_i=self.H.getFImag()+self.H.getFImagUnc()*f
         
         #ix=all indices for which after smoothening n H is still inbetwen the bounds        
         ix=py.all([H_r>=lb_r,H_r<ub_r,H_i>=lb_i,H_i<ub_i],axis=0)
@@ -367,10 +368,10 @@ class teralyz():
         newH=intpH(oldfreqaxis)
   
         #crop the time domain data to the first pulse and apply than the calculation
-        n=self.n_0-newH[:,2]/(2*py.pi*oldfreqaxis*l)*c
-        alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(abs(newH[:,0])*(n+1)**2/(4*n))
+        n=self.n_0.real-newH[:,3]/(2*py.pi*oldfreqaxis*l)*c
+        alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(newH[:,2]*(n+1)**2/(4*n))
 
-        return n.real,alpha.real
+        return n,alpha
     
     def plotInits(self,H,l,figurenumber=200):
         inits=self.calculateinits(H,l)
@@ -391,16 +392,12 @@ class teralyz():
         vals=[]
         bnds=((1,None),(0,None))
         nums=len(H[:,0])
-#        t=minimize(self.error_func,inits[:,0],args=(H[0,:],l), method='SLSQP',\
-#        bounds=bnds, options={'ftol':1e-9,'maxiter':2000, 'disp': False})
-#        res.append(t.x[0]-1j*t.x[1])
-#        vals.append(t.fun)
 
         for i in range(nums):
             
 #            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:2],l), method='SLSQP',\
 #            bounds=bnds, options={'ftol':1e-9,'maxiter':2000, 'disp': False})
-            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:2],l), method='Nelder-Mead',
+            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:3],l), method='Nelder-Mead',
             options={'xtol': 1e-6,'disp':False})
             res.append(t.x[0]-1j*t.x[1])
             vals.append(t.fun)
@@ -459,12 +456,12 @@ class teralyz():
         H_theory=self.H_theory(self.H.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
         #built the variable that should be saved:        
         savetofile=py.column_stack((
-        self.n[:,0].real,
-        self.n[:,1].real,self.n[:,1].imag, #the real and imaginary part of n
+        self.H.getfreqs(), #frequencies
+        self.n[:,1].real,-self.n[:,1].imag, #the real and imaginary part of n
         self.n[:,2].real,-self.n[:,2].imag, #the real and imaginary part of the smoothed n
-        self.H.fdData[:,1].real,self.H.fdData[:,1].imag,#H_measured
-        self.H.fdData[:,4].real,self.H.fdData[:,5].real,#uncertainties
-        self.H.fdData[:,2].real,self.H.fdData[:,3].real,#absH,ph H measured    
+        self.H.getFReal(),self.H.getFImag(),#H_measured
+        self.H.getFRealUnc(),self.H.getFImagUnc(),#uncertainties
+        self.H.getFAbs(),self.H.getFPh(),#absH,ph H measured    
         H_theory.real,H_theory.imag, #theoretic H
         ))
 
@@ -525,7 +522,7 @@ class teralyz():
         E_fu=py.zeros((len(n_i),len(n_r)))
         for i in range(len(n_r)):
             for k in range(len(n_i)):
-                E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.H.fdData[ix,:],l)
+                E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.H.fdData[ix,:3],l)
 #        print(E_fu[:,2])
         py.pcolor(N_R,N_I,py.log10(E_fu))
         py.colorbar()
@@ -630,7 +627,7 @@ def getparams(name):
     else:    
  #   the testdata used to write the code  
         thickness=677e-6 
-        samfiles=glob.glob(path2+'rehi/Sample*')
+        samfiles=glob.glob(path2+'rehi/Sample_?.txt')
         reffiles=glob.glob(path2+'rehi/Reference*') 
         mode='lucastestformat'
         teralyzer=py.loadtxt(path2+'rehi/Rehi_Teralyzer_OK.txt')
@@ -646,7 +643,7 @@ if __name__=="__main__":
     
 
     #Load Parameters from getparams
-    thickness,samfiles,reffiles,mode,teralyzer=getparams('Lactose2')
+    thickness,samfiles,reffiles,mode,teralyzer=getparams('rehi')
     #depending on format use different import module
     if mode=='lucastestformat':
         reftd=THzTdData(reffiles)
@@ -664,14 +661,21 @@ if __name__=="__main__":
     sam_fd=FdData(samtd)
 #    #initialize the mdata object (H,and so on)
     mdata=HMeas(ref_fd,sam_fd)
+#    mdata.getEtalonSpacing()
     mdata.manipulateFDData(-1e9,[200e9,2.2e12])
+#    mdata.doPlot()
 #    peaks=mdata.findAbsorptionLines()
-#    py.plot(mdata.getfreqsGHz(),20*py.log10(mdata.fdData[:,2]))
+#    py.plot(mdata.getfreqsGHz(),20*py.log10(mdata.fdData[:,3]))
 #    py.plot(mdata.getfreqsGHz()[peaks],20*py.log10(mdata.fdData[peaks,2]),'o')
-    myana=teralyz(mdata,thickness-30e-6,0.5*thickness,30)
-#    myana.doCalculation()
-#    myana.plotRefractiveIndex(1,1)
+    myana=teralyz(mdata,thickness,0.5*thickness,30)
+#    myana.findLintelli()
+#    myana.plotErrorFunction(thickness,800e9)
+    myana.doCalculation()
+    myana.plotRefractiveIndex(1,1)
 #    inits=myana.calculateinits(myana.H,myana.l_opt)
+#    H_t=myana.H_theory(myana.H.getfreqs(),inits,myana.l_opt)
+#    py.plot(myana.H.getfreqs(),H_t.imag)
+#    myana.plotInits(myana.H,thickness)
 #    py.figure(1)
 ##    py.plot(myana.n[:,0].real/1e9,myana.n[:,1])
 #    py.plot(myana.n[:,0].real/1e9,inits[0])
