@@ -8,16 +8,26 @@ import Terapy
 import TeraData
 
 parser = argparse.ArgumentParser(description='Calculate optical constants from THz-TD Data')
-parser.add_argument('--calcLength',action='store_false',help='switch length calculation off')
-parser.add_argument('--silent',action='store_true',help='switch save results off')
-parser.add_argument('--noSVMAF',default=5,nargs='?',type=int,help='No of SVMAF iterations')
-parser.add_argument('--outname','-o',nargs='?',type=str,help='prefix output filenames')
+#Path arguments
+parser.add_argument('--workpath','-w',type=str,default='',help='specify a base folder')
 parser.add_argument('--isample','-is',nargs='*',help='list of sample filenames')
 parser.add_argument('--ireference','-ir',nargs='*',help='list of reference filenames')
+parser.add_argument('--outname','-o',nargs='?',type=str,help='prefix output filenames')
+
+#input arguments
 parser.add_argument('--mode','-m',type=str,default='INRIM',choices=['INRIM','Marburg','lucastestformat'],help='format of the datafiles')
+
+#solver arguments
 parser.add_argument('--thickness','-t',type=float,help='sample thickness')
+
+#switches
+parser.add_argument('--windowing',action='store_false',help='switch Data Windowing Off')
+parser.add_argument('--zeroPadding',action='store_true',help='Switch Zero Padding on')
+parser.add_argument('--calcLength',action='store_false',help='switch length calculation off')
 parser.add_argument('--savePlots','-s',action='store_false',help='turn off saving TD and FD plots')
-parser.add_argument('--workpath','-w',type=str,default='',help='specify a base folder')
+parser.add_argument('--silent',action='store_true',help='switch save results off')
+parser.add_argument('--noSVMAF',default=5,nargs='?',type=int,help='No of SVMAF iterations')
+
 args = parser.parse_args()
 
 starttime=time.time()
@@ -58,15 +68,25 @@ if mode=='INRIM':
     reftd=TeraData.ImportInrimData(reffiles)
     samtd=TeraData.ImportInrimData(samfiles)
 
-#    #initialize the fd_data objects        
+#windowing of the data?
+if args.windowing:
+    reftd.getWindowedData(1e-12)
+    samtd.getWindowedData(1e-12)
+    
+#initialize the fd_data objects        
 ref_fd=TeraData.FdData(reftd)
-sam_fd=TeraData.FdData(samtd)
+sam_fd=TeraData.FdData(samtd)    
 
-##    #initialize the mdata object (H,and so on)
+#Zero padding of the data?
+if args.zeroPadding:
+    ref_fd.zeroPadd(5e9)
+    sam_fd.zeroPadd(5e9)
+
+#initialize the mdata object (H,and so on)
 
 mdata=Terapy.HMeas(ref_fd,sam_fd)
 
-#mdata.manipulateFDData(-11e9,[200e9,2.2e12])
+mdata.manipulateFDData(-11e9,[200e9,3.2e12])
 
 myana=Terapy.teralyz(mdata,thickness,20e-6,30)
 myana.doCalculation(args.calcLength,args.noSVMAF,args.silent)
