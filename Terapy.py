@@ -34,6 +34,7 @@ class HMeas(FdData):
     def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
         #this method provides the means to change the underlying fdData objects and recalculate H
         #if just an interpolated H with fbins is needed, use getInterpolatedFdData from FdData class        
+               
         if fbins>0.5e9:
             if mode=='zeropadd':
                 self.zeroPadd(fbins)
@@ -112,7 +113,7 @@ class HMeas(FdData):
          #else return       
         return 'good'
       
-    def interpolateData(self,prob_str):
+    def _commonFreqSamRef(self,prob_str):
         #take care, this actually manipulates the real underlying data!
         #maybe consider to do a deepcopy!
     
@@ -151,7 +152,7 @@ class HMeas(FdData):
         if not prob_str=='good':
             print("interpolation required")
             print(prob_str)
-            self.interpolateData(prob_str)
+            self._commonFreqSamRef(prob_str)
         
         H_unc=self.calculateSTDunc()
             #take care that abs(H) is always smaller one!
