@@ -392,20 +392,20 @@ class FdData():
         
         fdph=abs(py.unwrap(py.angle(fd)))
         dfreq=py.fftfreq(tdData.num_points,tdData.dt)                
-        fdph=self.removePhaseOffset(py.column_stack((dfreq,fdph)))
+        fdph=self.removePhaseOffset(dfreq,fdph)
         t=py.column_stack((dfreq,fd.real,fd.imag,fdabs,fdph))
         t=self.getcroppedData(t,0,unc[-1,0])
         intpunc=interp1d(unc[:,0],unc[:,1:],axis=0)        
         unc=intpunc(t[:,0])
         return py.column_stack((t,unc))
     
-    def removePhaseOffset(self,ph):
-        #cut data to reasonable range:
-        lower=200e9
-        upper=1e12        
-        ph_c=self.getcroppedData(ph,lower,upper)
+    def removePhaseOffset(self,freqs,ph,startfreq=200e9,endfreq=1e12):
+        #cut phase to reasonable range:
+        ph_c=self.getcroppedData(py.column_stack((freqs,ph)),startfreq,endfreq)
+        #determine the slope and the offset        
         p=py.polyfit(ph_c[:,0],ph_c[:,1],1)
-        return ph[:,1]-p[1]
+        #return full phase-offset(croppedPhase)
+        return ph-p[1]
 
     def calculateSTDunc(self):
         #return asarray _tdData
@@ -436,7 +436,7 @@ class FdData():
             b=abs(a)
             c=[]
             for i in range(self._tdData.numberOfDataSets):
-                c.append(self.removePhaseOffset(py.column_stack((dfreq,py.unwrap(py.angle(a[i,:]))))))
+                c.append(self.removePhaseOffset(dfreq,py.unwrap(py.angle(a[i,:]))))
             c=py.asarray(c)
             
             repeat_noise_abs=py.std(b,axis=0)
@@ -624,6 +624,12 @@ class FdData():
         py.figure('FD-PH-UNC-Plot')
         py.plot(self.getfreqsGHz(),self.getFPh())
         py.plot(self.getfreqsGHz(),self.getFPh()+f*self.getFPhUnc(),'--',self.getfreqsGHz(),self.getFPh()+self.getFPhUnc(),'--')
+
+    def setPhase(self,newPh):
+        if len(newPh)!=self.getLength():
+            print 'Setting phase not possible, wrong length'
+        else:
+            self.fdData[:,4]=newPh
 
     def getFReal(self):
         return self.fdData[:,1]
