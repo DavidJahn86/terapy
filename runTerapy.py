@@ -91,7 +91,6 @@ mdata.manipulateFDData(-11e9,[200e9,3.2e12])
 myana=Terapy.teralyz(mdata,thickness,20e-6,30)
 myana.doCalculation(args.calcLength,args.noSVMAF,args.silent)
 
-
 if args.outname==None:
     args.outname=myana.getFilenameSuggestion()
 
@@ -119,10 +118,10 @@ if args.savePlots:
     mdata.doPlot()
     pylab.savefig(args.workpath+args.outname + 'TransferFunction.png')
     pylab.close()
-#
+
 myana.plotRefractiveIndex(1,1,args.workpath+args.outname)
 myana.saveResults(args.workpath+args.outname)
-#
+
 endtime=time.time()
 print "Consumed Time: " + str(endtime-starttime)
 pylab.show()

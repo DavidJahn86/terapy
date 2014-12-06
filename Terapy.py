@@ -488,7 +488,7 @@ class teralyz():
         else:
             figname_b=filename
             
-        py.figure(1)
+        py.figure('Refractive_Real_Plot')
         if bool_plotsmoothed==1:
             py.plot(self.n[:,0].real/1e9,self.n[:,2].real)
         else:
@@ -500,7 +500,7 @@ class teralyz():
             figname=figname_b+'n_real.png'
             py.savefig(figname,dpi=200)
             
-        py.figure(2)
+        py.figure('Refractive_Imag_Plot')
         if bool_plotsmoothed==1:
             py.plot(self.n[:,0].real/1e9,-self.n[:,2].imag)
         else:
