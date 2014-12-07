@@ -129,8 +129,8 @@ class HMeas(FdData):
             tdsam.zeroPaddData(N,'zero','start')
       
         #(max min notation for readability?
-        cmin=max(min(tdref.tdData[:,0]),min(tdsam.tdData[:,0]))
-        cmax=min(max(tdref.tdData[:,0]),max(tdsam.tdData[:,0]))
+        cmin=max(min(tdref.getTimes()),min(tdsam.getTimes()))
+        cmax=min(max(tdref.getTimes()),max(tdsam.getTimes()))
         clen=min(tdref.getLength(),tdsam.getLength())
         
         #safe also old bnds        

@@ -181,7 +181,7 @@ class THzTdData():
 #            return py.transpose(py.asarray([timeaxis,longerData]))
     
     def getLength(self):
-        return len(self.tdData[:,0])
+        return len(self.getTimes())
         
     def getfilename(self):
         return self.filename
@@ -217,13 +217,13 @@ class THzTdData():
             uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[-20:,2])
             longunc=py.append(self.tdData[:,2],uncpadd)
             longdata=py.append(self.tdData[:,1],paddvec)
-            longtime=py.append(self.tdData[:,0],py.linspace(self.tdData[-1,0],self.tdData[-1,0]+desiredLength*self.dt,desiredLength))
+            longtime=py.append(self.getTimes(),py.linspace(self.tdData[-1,0],self.tdData[-1,0]+desiredLength*self.dt,desiredLength))
         else:
             uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[:20,2])
             longunc=py.append(uncpadd,self.tdData[:,2])
             longdata=py.append(paddvec,self.tdData[:,1])
             timepadd=py.linspace(self.tdData[0,0]-(desiredLength+1)*self.dt,self.tdData[0,0],desiredLength)
-            longtime=py.append(timepadd,self.tdData[:,0])
+            longtime=py.append(timepadd,self.getTimes())
         self.setTDData(py.column_stack((longtime,longdata,longunc)))
             
     def getFirstPuls(self,after):
@@ -246,7 +246,6 @@ class THzTdData():
         self.dt=abs(py.mean(tdData[10:20,0]-tdData[9:19,0]))       
 #        self.dt=(tdData[-1,0]-tdData[0,0])/len(tdData[:,0])
         self.num_points=len(tdData[:,0])
-    
     def getWindowedData(self,windowlength_time):
         N=int(windowlength_time/self.dt)
         w=py.blackman(N*2)
@@ -261,15 +260,27 @@ class THzTdData():
     
     def doTdPlot(self,name='TD-Plot'):
         py.figure(name)
-        py.plot(self.tdData[:,0]*1e12,self.tdData[:,1])      
+        py.plot(self.getTimesPs(),self.getEX())      
         py.xlabel('Time in ps')
         py.ylabel('Amplitude, arb. units')
         
     def doPlotWithunc(self,no_std=2):
         self.doTdPlot('TD-UNC-Plot')
-        py.plot(self.tdData[:,0]*1e12,self.tdData[:,1]+no_std*self.tdData[:,2],'g--')
-        py.plot(self.tdData[:,0]*1e12,self.tdData[:,1]-no_std*self.tdData[:,2],'g--')
+        py.plot(self.getTimesPs(),self.getEX()+no_std*self.getUncEX(),'g--')
+        py.plot(self.getTimesPs(),self.getEX()-no_std*self.getUncEX(),'g--')
 
+
+    def getTimes(self):
+        return self.tdData[:,0]
+
+    def getTimesPs(self):
+        return self.getTimes()*1e12
+        
+    def getEX(self):
+        return self.tdData[:,1]
+    
+    def getUncEX(self):
+        return self.tdData[:,2]
         
 class ImportMarburgData(THzTdData):
 
