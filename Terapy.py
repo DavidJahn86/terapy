@@ -1,5 +1,4 @@
 import pylab as py
-import copy
 import glob
 import os
 from uncertainties import unumpy
@@ -30,7 +29,7 @@ class HMeas(FdData):
             minsf,maxsf=self.fdsam.getBandwidth()
             
             self.manipulateFDData(fbins,[max(minrf,minsf,FdData.FMIN),min(maxrf,maxsf,FdData.FMAX)])
-        
+
     def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
         #this method provides the means to change the underlying fdData objects and recalculate H
         #if just an interpolated H with fbins is needed, use getInterpolatedFdData from FdData class        
@@ -282,10 +281,8 @@ class teralyz():
         n=self.n_estimated
         #oscillation period can be calculated from H data!
         f_span=c/2*1/self.l_estimated*1/n #(this should be the length of the oscillation)
-        
-        calcdata=copy.deepcopy(self.H)
-        calcdata.manipulateFDData(-1,[fmax-f_span*1,fmax+f_span*4])
-        H_small=calcdata.fdData
+
+        H_small=self.H.getcroppedData(self.H.fdData,fmax-f_span*1,fmax+f_span*4)
         py.figure(33)
         t=minimize(self.errorL,self.userthickness,args=((py.asarray(H_small),)),\
         method='Nelder-Mead', options={'xtol':1e-6,'disp': False})#, 'disp': False})
