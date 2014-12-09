@@ -96,7 +96,7 @@ ax2 = fig.add_subplot(2,1,2)
 ax2.set_xlabel('time (ps)')
 ax2.set_ylabel('SNR')
 ax2.grid(True)
-ax2.semilogy(reftd.tdData[:,0]*1e12,reftd.getSNR(),samtd.tdData[:,0]*1e12,samtd.getSNR())
+ax2.semilogy(reftd.getTimesPs(),reftd.getSNR(),samtd.getTimesPs(),samtd.getSNR())
 ax2.legend(('ref', 'sam'))
 #plt.title('SNR')
 
@@ -115,7 +115,7 @@ ax3 = fig1.add_subplot(2,1,2)
 ax3.set_xlabel('time (ps)')
 ax3.set_ylabel('dynamic range')
 ax3.grid(True)
-ax3.semilogy(reftd.tdData[:,0]*1e12,reftd.getDR(),samtd.tdData[:,0]*1e12,samtd.getDR())
+ax3.semilogy(reftd.getTimesPs(),reftd.getDR(),samtd.getTimesPs(),samtd.getDR())
 ax3.legend(('ref', 'sam'))
 #plt.title('dynamic range')
 
@@ -125,9 +125,9 @@ ax4.set_xlabel('time (ps)')
 ax4.set_ylabel('X channel (V)')
 #ax4.grid(True)
 no_std=2
-ax4.plot(reftd.tdData[:,0]*1e12,reftd.tdData[:,1],\
-    reftd.tdData[:,0]*1e12,reftd.tdData[:,1] + no_std*reftd.tdData[:,2],'g--',\
-    reftd.tdData[:,0]*1e12,reftd.tdData[:,1] - no_std*reftd.tdData[:,2],'g--')
+ax4.plot(reftd.getTimesPs(),reftd.getEX(),\
+    reftd.getTimesPs(),reftd.getEX() + no_std*reftd.getUncEX(),'g--',\
+    reftd.getTimesPs(),reftd.getEX() - no_std*reftd.getUncEX(),'g--')
 #ax4.legend(('ref'))
 plt.title('reference signal with uncertainty')
 
@@ -137,9 +137,9 @@ ax5.set_xlabel('time (ps)')
 ax5.set_ylabel('X channel (V)')
 #ax4.grid(True)
 no_std=2
-ax5.plot(samtd.tdData[:,0]*1e12,samtd.tdData[:,1],\
-    samtd.tdData[:,0]*1e12,samtd.tdData[:,1] + no_std*samtd.tdData[:,2],'g--',\
-    samtd.tdData[:,0]*1e12,samtd.tdData[:,1] - no_std*samtd.tdData[:,2],'g--')
+ax5.plot(samtd.getTimesPs(),samtd.getEX(),\
+    samtd.getTimesPs(),samtd.getEX() + no_std*samtd.getUncEX(),'g--',\
+    samtd.getTimesPs(),samtd.getEX() - no_std*samtd.getUncEX(),'g--')
 #ax5.legend(('sam'))
 plt.title('sample signal with uncertainty')
 
@@ -148,9 +148,9 @@ ax6 = fig3.add_subplot(2,1,1)
 ax6.set_xlabel('frequency (GHz)')
 ax6.set_ylabel('dynamic range')
 ax6.grid(True)
-ax6.semilogy(ref_fd.getfreqsGHz(),ref_fd.fdData[:,2],\
-    ref_fd.getfreqsGHz(), ref_fd.fdData[:,2] + ref_fd.fdData[:,6], 'g--',\
-        ref_fd.getfreqsGHz(), ref_fd.fdData[:,2] - ref_fd.fdData[:,6], 'g--')
+ax6.semilogy(ref_fd.getfreqsGHz(),ref_fd.getFAbs(),\
+    ref_fd.getfreqsGHz(), ref_fd.getFAbs() + ref_fd.getFAbsUnc(), 'g--',\
+        ref_fd.getfreqsGHz(), ref_fd.getFAbs() - ref_fd.getFAbsUnc(), 'g--')
 #ax6.legend(('ref'))
 plt.title('ABS with U')
 
@@ -159,8 +159,8 @@ ax7.set_xlabel('frequency (GHz)')
 ax7.set_ylabel('dynamic range')
 ax7.grid(True)
 ax7.semilogy(ref_fd.getfreqsGHz(),ref_fd.fdData[:,3],\
-    ref_fd.getfreqsGHz(), ref_fd.fdData[:,3] + ref_fd.fdData[:,7], 'g--',\
-        ref_fd.getfreqsGHz(), ref_fd.fdData[:,3] - ref_fd.fdData[:,7], 'g--')
+    ref_fd.getfreqsGHz(), ref_fd.getFPh() + ref_fd.getFPhUnc(), 'g--',\
+        ref_fd.getfreqsGHz(), ref_fd.getFPh() - ref_fd.getFPhUnc(), 'g--')
 #ax7.legend(('ref'))
 plt.title('PHASE with U')
 
