@@ -81,7 +81,7 @@ class THzTdData():
         if tdDatas.shape[0]==1:
             uncarray=py.zeros((len(tdDatas[0,:,0]),))
         else:
-            uncarray=py.std(py.asarray(tdDatas[:,:,1]),axis=0)    
+            uncarray=py.std(py.asarray(tdDatas[:,:,1]),axis=0, ddof = 1)/py.sqrt(self.numberOfDataSets)
         return uncarray
        
     def importfile(self,fname,params):
