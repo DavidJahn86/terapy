@@ -13,7 +13,7 @@ class THzTdData():
             #create instance by loading filenames
             filenames=kw[0]
             if len(kw)<2:
-                params=[1,0,1,'.',1]
+                params=[1,0,1,2,'.',1]
             else:
                 params=kw[1]
             self.filename=filenames
@@ -42,7 +42,7 @@ class THzTdData():
         meantdData=py.mean(tdDatas,axis=0)
         
         unc=self.calcunc(tdDatas)
-        return py.column_stack((meantdData[:,:2],unc))       
+        return py.column_stack((meantdData,unc))       
     
     def getPreceedingNoise(self,timePreceedingSignal=-1):
         precnoise=[]
@@ -71,7 +71,7 @@ class THzTdData():
                 endtime=starttime+timePreceedingSignal
             
             noise=self.getShorterData(self._thzdata_raw[i],starttime,endtime)
-            noise=py.detrend(noise[:,1])
+            noise=signal.detrend(noise[:,1])
 #            noise=noise[:,1]
             precnoise=py.concatenate((precnoise,noise))
         return precnoise
@@ -79,22 +79,25 @@ class THzTdData():
     def calcunc(self,tdDatas):
         #tdDatas is a np array of tdData measurements
         if tdDatas.shape[0]==1:
-            uncarray=py.zeros((len(tdDatas[0,:,0]),))
+            uncarray=py.zeros((len(tdDatas[0,:,0]),2))
         else:
-            uncarray=py.std(py.asarray(tdDatas[:,:,1]),axis=0)    
+            uncarray=py.std(py.asarray(tdDatas[:,:,1:3]),axis=0)    
         return uncarray
        
     def importfile(self,fname,params):
         # if even more sophisticated things are needed, just inherit THzTdData class
         #and override the importfile method
         try:
-            if params[3]=='.':
-                data=py.loadtxt(fname,usecols=(params[1],params[2]))
-            elif params[3]==',':
+            if params[4]=='.':
+                data=py.loadtxt(fname,
+                                usecols=(params[1],params[2],params[3]),
+                                skiprows=params[5])
+            elif params[4]==',':
                 str2float=lambda val: float(val.replace(',','.'))
                 data=py.loadtxt(fname,
-                converters={params[1]:str2float,params[2]:str2float},
-                usecols=(params[1],params[2]),skiprows=params[4])                
+                converters={params[1]:str2float,params[2]:str2float,params[3]:str2float},
+                usecols=(params[1],params[2],params[3]),
+                skiprows=params[5])                
         except IOError:
             print "File " + fname + " could not be loaded"
             sys.exit()
@@ -153,6 +156,7 @@ class THzTdData():
     def _removeTimeShift(self,tdDatas):
         #not sure if needed, maybe we want to correct the rawdata by shifting the maxima on top of each other
         #the indices of the maxima        
+        #takes at the moment only the X Channel data and corrects it (safer!)
         peak_pos=[]
         for tdData in tdDatas:
             time_max_raw=tdData[py.argmax(tdData[:,1]),0]
@@ -167,9 +171,8 @@ class THzTdData():
         return tdDatas,py.std(peak_pos)
   
     def _removeLinearDrift(self,tdData):
-        #not yet implemented
-        signal=tdData[:,1]
-        tdData[:,1]=py.detrend(signal,key='linear')
+        #do this for x and y channel
+        tdData[:,1:3]=signal.detrend(tdData[:,1:3],axis=0)
         return tdData
     
     def getInterData(self,tdData,desiredLength,mint,maxt,tkind='linear'):
@@ -214,16 +217,21 @@ class THzTdData():
             paddvec=py.ones((desiredLength,))*py.mean(self.tdData[-20:,1])
 
         if where=='end':
+            #timeaxis:
+            longtime=py.append(self.getTimes(),py.linspace(self.tdData[-1,0],self.tdData[-1,0]+desiredLength*self.dt,desiredLength))            
+            #rest
+                        
             uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[-20:,2])
-            longunc=py.append(self.tdData[:,2],uncpadd)
-            longdata=py.append(self.tdData[:,1],paddvec)
-            longtime=py.append(self.getTimes(),py.linspace(self.tdData[-1,0],self.tdData[-1,0]+desiredLength*self.dt,desiredLength))
+            longunc=py.append(self.getUncEX(),uncpadd)
+            longdataX=py.append(self.getEX(),paddvec)
+
         else:
             uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[:20,2])
             longunc=py.append(uncpadd,self.tdData[:,2])
             longdata=py.append(paddvec,self.tdData[:,1])
             timepadd=py.linspace(self.tdData[0,0]-(desiredLength+1)*self.dt,self.tdData[0,0],desiredLength)
             longtime=py.append(timepadd,self.getTimes())
+            
         self.setTDData(py.column_stack((longtime,longdata,longunc)))
             
     def getFirstPuls(self,after):
@@ -251,7 +259,8 @@ class THzTdData():
         w=py.blackman(N*2)
         w=py.asarray(py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:])))
         windowedData=self.tdData
-        windowedData[:,1]*=w        
+        windowedData[:,1:3]*=w*py.ones((len(w),2))
+        
         return windowedData
         
     def resetTDData(self):
@@ -261,6 +270,7 @@ class THzTdData():
     def doTdPlot(self,name='TD-Plot'):
         py.figure(name)
         py.plot(self.getTimesPs(),self.getEX())      
+        py.plot(self.getTimesPs(),self.getEY())      
         py.xlabel('Time in ps')
         py.ylabel('Amplitude, arb. units')
         
@@ -268,6 +278,8 @@ class THzTdData():
         self.doTdPlot('TD-UNC-Plot')
         py.plot(self.getTimesPs(),self.getEX()+no_std*self.getUncEX(),'g--')
         py.plot(self.getTimesPs(),self.getEX()-no_std*self.getUncEX(),'g--')
+        py.plot(self.getTimesPs(),self.getEY()+no_std*self.getUncEY(),'g--')
+        py.plot(self.getTimesPs(),self.getEY()-no_std*self.getUncEY(),'g--')
 
 
     def getTimes(self):
@@ -280,7 +292,13 @@ class THzTdData():
         return self.tdData[:,1]
     
     def getUncEX(self):
+        return self.tdData[:,3]
+        
+    def getEY(self):
         return self.tdData[:,2]
+    
+    def getUncEY(self):
+        return self.tdData[:,4]
         
 class ImportMarburgData(THzTdData):
 
@@ -291,10 +309,11 @@ class ImportMarburgData(THzTdData):
     def _filePreferences(self):
         time_factor=1
         colon_time=0
-        colon_data=1
+        colon_dataX=1
+        colon_dataY=2
         decimal_sep=','
         skiprows=0
-        return [time_factor,colon_time,colon_data,decimal_sep,skiprows]
+        return [time_factor,colon_time,colon_dataX,colon_dataY,decimal_sep,skiprows]
 
 class ImportInrimData(THzTdData):
   
@@ -305,10 +324,11 @@ class ImportInrimData(THzTdData):
     def _filePreferences(self):        
         time_factor=1    #0
         colon_time=2   #1
-        colon_data=3    #2
+        colon_dataX=3    #2
+        colon_dataY=5
         decimal_sep='.' #3
         skiprows=0      #4
-        return [time_factor,colon_time,colon_data,decimal_sep,skiprows]
+        return [time_factor,colon_time,colon_dataX,colon_dataY,decimal_sep,skiprows]
 
 class FdData():
     #hard frequency axis
@@ -668,7 +688,7 @@ if __name__=='__main__':
     import glob
     path2='/home/jahndav/Dropbox/THz-Analysis/'    
 #    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
-    samfiles=glob.glob('/home/jahndav/Dropbox/THz-Analysis/rehi/Sample_?.txt')
+    samfiles=glob.glob('/home/dave/Dropbox/THz-Analysis/rehi/Sample_?.txt')
  
     myTDData=ImportMarburgData(samfiles)
 
