@@ -70,8 +70,9 @@ if mode=='INRIM':
 
 #windowing of the data?
 if args.windowing:
-    reftd.getWindowedData(1e-12)
-    samtd.getWindowedData(1e-12)
+    
+    reftd.setTDData(reftd.getWindowedData(1e-12))
+    samtd.setTDData(samtd.getWindowedData(1e-12))
     
 #initialize the fd_data objects        
 ref_fd=TeraData.FdData(reftd)
