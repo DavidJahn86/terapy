@@ -13,7 +13,12 @@ class THzTdData():
             #create instance by loading filenames
             filenames=kw[0]
             if len(kw)<2:
-                params=[1,0,1,2,'.',1]
+                params={'time_factor':1,
+                        'time_col':0,
+                        'X_col':1,
+                        'Y_col':2,
+                        'dec_sep':'.',
+                        'skiprows':0}
             else:
                 params=kw[1]
             self.filename=filenames
@@ -88,21 +93,29 @@ class THzTdData():
         # if even more sophisticated things are needed, just inherit THzTdData class
         #and override the importfile method
         try:
-            if params[4]=='.':
+            if params['dec_sep']=='.':
+                
                 data=py.loadtxt(fname,
-                                usecols=(params[1],params[2],params[3]),
-                                skiprows=params[5])
-            elif params[4]==',':
+                                usecols=(params['time_col'],
+                                         params['X_col'],
+                                         params['Y_col']),
+                                skiprows=params['skiprows'])
+                                
+            elif params['dec_sep']==',':
                 str2float=lambda val: float(val.replace(',','.'))
                 data=py.loadtxt(fname,
-                converters={params[1]:str2float,params[2]:str2float,params[3]:str2float},
-                usecols=(params[1],params[2],params[3]),
-                skiprows=params[5])                
+                                converters={params['time_col']:str2float,
+                                            params['X_col']:str2float,
+                                            params['Y_col']:str2float},
+                                usecols=(params['time_col'],
+                                         params['X_col'],
+                                         params['Y_col']),
+                                skiprows=params['skiprows'])                
         except IOError:
             print "File " + fname + " could not be loaded"
             sys.exit()
 
-        data[:,0]*=params[0]
+        data[:,0]*=params['time_factor']
         
         if data[1,0]-data[0,0]<0:
             data=py.flipud(data)
@@ -113,14 +126,38 @@ class THzTdData():
         #so far only offset removal, think of windowing etc...
         tempTDDatas=[]
         for tdData in tdDatas:
+            #this rotates all signal to X
+#            t=self._rotateToXChannel(tdData)
+            #this removes Linear Drifts in X-Channel
             t=self._removeLinearDrift(tdData)
             tempTDDatas.append(t)
         #before interpolating to a common time axis, this need to be a list of 
         #tdData arrays, since they might differ in length
-        #first shift than interpolate 
+        
+        #first shift maxima on top, than interpolate 
         tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
         tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
         return tempTDDatas
+        
+    def _rotateToXChannel(self,tdData):
+        #this function should remove all signal from Y-Channel
+        
+        #Calculate lock-in phase:
+        XC=tdData[:,1]
+        YC=tdData[:,2]
+        #go to pulse:
+        ix_max=py.argmax(XC)
+        XCs=XC[max(0,ix_max-15):min(len(XC),ix_max+15)]
+        YCs=YC[max(0,ix_max-15):min(len(XC),ix_max+15)]
+        #calculate phase
+        phase=py.arctan(py.mean(YCs/XCs))
+        #rotate to XChannel
+        tdData[:,1]=XC*py.cos(phase)-YC*py.sin(phase)
+        tdData[:,2]=XC*py.sin(phase)+YC*py.cos(phase)
+        
+        return tdData
+        
+        
         
     def _bringToCommonTimeAxis(self,tdDatas):
         #What can happen: 
@@ -171,7 +208,7 @@ class THzTdData():
         return tdDatas,py.std(peak_pos)
   
     def _removeLinearDrift(self,tdData):
-        #do this for x and y channel
+        #do this for x and y channel?
         tdData[:,1:3]=signal.detrend(tdData[:,1:3],axis=0)
         return tdData
     
@@ -190,19 +227,19 @@ class THzTdData():
         return self.filename
     
     def getDR(self):
-        Emax=abs(self.tdData[:,1])
+        Emax=abs(self.getEX())
         noise=py.sqrt(py.mean(self.getPreceedingNoise()**2))
         return Emax/noise
     
     def getSNR(self):
-        return abs(self.tdData[:,1])/self.tdData[:,2]
+        return abs(self.getEX())/self.getUncEX()
     
     def getTimeWindowLength(self):
         peak=self.getPeakPosition()
         return abs(self.tdData[-1,0]-peak)
     
     def getPeakPosition(self):
-        return self.tdData[py.argmax(self.tdData[:,1]),0]
+        return self.tdData[py.argmax(self.getEX()),0]
     
     def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
         if desiredLength<0:
@@ -214,25 +251,21 @@ class THzTdData():
             paddvec=py.normal(0,py.std(self.getPreceedingNoise())*0.05,desiredLength)
                                 
         else:
-            paddvec=py.ones((desiredLength,))*py.mean(self.tdData[-20:,1])
-
+            paddvec=py.ones((desiredLength,self.tdData.shape[1]-1))
+            paddvec*=py.mean(self.tdData[-20:,1:])
+            
+        timevec=self.getTimes()
         if where=='end':
             #timeaxis:
-            longtime=py.append(self.getTimes(),py.linspace(self.tdData[-1,0],self.tdData[-1,0]+desiredLength*self.dt,desiredLength))            
-            #rest
-                        
-            uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[-20:,2])
-            longunc=py.append(self.getUncEX(),uncpadd)
-            longdataX=py.append(self.getEX(),paddvec)
-
+            newtimes=py.linspace(timevec[-1],timevec[-1]+desiredLength*self.dt,desiredLength)
+            paddvec=py.column_stack((newtimes,paddvec))
+            longvec=py.row_stack((self.tdData,paddvec))
         else:
-            uncpadd=py.ones((desiredLength,))*py.mean(self.tdData[:20,2])
-            longunc=py.append(uncpadd,self.tdData[:,2])
-            longdata=py.append(paddvec,self.tdData[:,1])
-            timepadd=py.linspace(self.tdData[0,0]-(desiredLength+1)*self.dt,self.tdData[0,0],desiredLength)
-            longtime=py.append(timepadd,self.getTimes())
+            newtimes=py.linspace(timevec[0]-(desiredLength+1)*self.dt,timevec[0],desiredLength)
+            paddvec=py.column_stack((newtimes,paddvec))
+            longvec=py.row_stack((paddvec,self.tdData))
             
-        self.setTDData(py.column_stack((longtime,longdata,longunc)))
+        self.setTDData(longvec)
             
     def getFirstPuls(self,after):
         tcenter=self.getPeakPosition()
@@ -240,12 +273,11 @@ class THzTdData():
         #the beginning of the time data, in order to avoid phase problems
         
         tmax=tcenter+after
-        return self.getShorterData(self.tdData,self.tdData[0,0],tmax)
+        return self.getShorterData(self.tdData,self.getTimes()[0],tmax)
     
     def getShorterData(self,tdData,tmin,tmax):
         ix=py.all([tdData[:,0]>=tmin,tdData[:,0]<tmax],axis=0)
         return tdData[ix,:]
-    
     
     def setTDData(self,tdData):
         #if tdData array is changed outside, use this function, to guarantee data integrity
@@ -254,13 +286,16 @@ class THzTdData():
         self.dt=abs(py.mean(tdData[10:20,0]-tdData[9:19,0]))       
 #        self.dt=(tdData[-1,0]-tdData[0,0])/len(tdData[:,0])
         self.num_points=len(tdData[:,0])
-    def getWindowedData(self,windowlength_time):
+
+    def getWindowedData(self,windowlength_time=1e-12):
         N=int(windowlength_time/self.dt)
         w=py.blackman(N*2)
-        w=py.asarray(py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:])))
+        w=py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:]))
         windowedData=self.tdData
-        windowedData[:,1:3]*=w*py.ones((len(w),2))
-        
+        windowedData[:,1]*=w
+        windowedData[:,2]*=w
+        windowedData[:,3]*=w
+        windowedData[:,4]*=w
         return windowedData
         
     def resetTDData(self):
@@ -303,33 +338,27 @@ class THzTdData():
 class ImportMarburgData(THzTdData):
 
     def __init__(self,filename):
-        Params=self._filePreferences()        
-        THzTdData.__init__(self,filename,Params)
         
-    def _filePreferences(self):
-        time_factor=1
-        colon_time=0
-        colon_dataX=1
-        colon_dataY=2
-        decimal_sep=','
-        skiprows=0
-        return [time_factor,colon_time,colon_dataX,colon_dataY,decimal_sep,skiprows]
-
+        params={'time_factor':1,
+                'time_col':0,
+                'X_col':1,
+                'Y_col':2,
+                'dec_sep':',',
+                'skiprows':0}    
+        THzTdData.__init__(self,filename,params)
+        
+    
 class ImportInrimData(THzTdData):
   
     def __init__(self,filename):
-        Params=self._filePreferences()        
-        THzTdData.__init__(self,filename,Params)
+        params={'time_factor':1,
+                'time_col':2,
+                'X_col':3,
+                'Y_col':5,
+                'dec_sep':'.',
+                'skiprows':0}    
+        THzTdData.__init__(self,filename,params)
   
-    def _filePreferences(self):        
-        time_factor=1    #0
-        colon_time=2   #1
-        colon_dataX=3    #2
-        colon_dataY=5
-        decimal_sep='.' #3
-        skiprows=0      #4
-        return [time_factor,colon_time,colon_dataX,colon_dataY,decimal_sep,skiprows]
-
 class FdData():
     #hard frequency axis
     FMIN=0
