@@ -8,11 +8,14 @@ class THzTdData():
 
     def __init__(self,*kw,**kwargs):
         self._thzdata_raw=[]
-
+        #two different constructors: 
+        #1) create TDData Object from files, without passing 'existing'
+        #2) create TDData Object from existing TDData Object by passing 'existing'
         if not 'existing' in kwargs:
             #create instance by loading filenames
             filenames=kw[0]
             if len(kw)<2:
+                #if no parameter set is set, use the following dictionary
                 params={'time_factor':1,
                         'time_col':0,
                         'X_col':1,
@@ -21,79 +24,95 @@ class THzTdData():
                         'skiprows':0}
             else:
                 params=kw[1]
+  
+            #set member variables          
             self.filename=filenames
             self.numberOfDataSets=len(self.filename)
             
-     
+            #import files
             for fname in self.filename:
                 self._thzdata_raw.append(self.importfile(fname,params))
             
+            #calculate TDData array along with uncertainties and so on
             self.resetTDData()
         else:
-            
+            #set tdData array
             self.setTDData(kw[0])
-            self._thzdata_raw=[self.tdData]            
+            self._thzdata_raw=[self.tdData]
+            #set filename (only to prevent conflicts)
             if len(kw)>1:
                 self.filename=kw[1]
             else:
                 self.filename=['None']
             
-            self.numberOfDataSets=len(self.filename)                
+            self.numberOfDataSets=len(self.filename) 
+            #set rawdata, if also passed               
             if len(kw)>2:
                 self._thzdata_raw=kw[2]
     
     def calcTDData(self,tdDatas):
-        #tdDatas should be an array of tdDataarrays
-        meantdData=py.mean(tdDatas,axis=0)
-        
-        unc=self.calcunc(tdDatas)
-        return py.column_stack((meantdData,unc))       
+        #tdDatas should be an array of tdDataarrays, along with ther
+        meantdData,sumofweights=py.average(tdDatas[:,:,1:3],axis=0,weights=1.0/tdDatas[:,:,3:]**2,returned=True)
+        unc=py.sqrt(1.0/sumofweights)
+        #time axis are all equal
+        return py.column_stack((tdDatas[0][:,0],meantdData,unc))       
     
-    def getPreceedingNoise(self,timePreceedingSignal=-1):
-        precnoise=[]
-        
+    def getPreceedingNoise(self,tdData,timePreceedingSignal=-1):
         #check for reasonable input
         #peak position in raw data is always at origin!
         nearestdistancetopeak=2.5e-12
-        if min(self._thzdata_raw[0][:,0])+timePreceedingSignal>-nearestdistancetopeak:
-            timePreceedingSignal=-min(self._thzdata_raw[0][:,0])-nearestdistancetopeak
+        if min(tdData[:,0])+timePreceedingSignal>-nearestdistancetopeak:
+            timePreceedingSignal=-min(tdData[:,0])-nearestdistancetopeak
             print("Time Interval of preceeding noise to long, reset done")
             #dont use user input if higher than peak
        #really neccessary for each dataset, or would it suffice to take the first?
-        for i in range(self.numberOfDataSets):       
-            starttime=min(self._thzdata_raw[i][:,0])
-            if timePreceedingSignal==-1:
-              #determine length automatically            
-
-                ratio=2
-                ix_max=py.argmax(self._thzdata_raw[i][:,1])
-                ix_min=py.argmin(self._thzdata_raw[i][:,1])
-                earlier=min(ix_max,ix_min)
+        starttime=min(tdData[:,0])
+        if timePreceedingSignal<0:
+            #determine length automatically            
+            ratio=2
+            ix_max=py.argmax(tdData[:,1])
+            ix_min=py.argmin(tdData[:,1])
+            earlier=min(ix_max,ix_min)
                 #take only the first nts part            
-                endtime=self._thzdata_raw[i][int(earlier/ratio),0]
-            else:
-                    
-                endtime=starttime+timePreceedingSignal
+            endtime=tdData[int(earlier/ratio),0]
+        else:
+            endtime=starttime+timePreceedingSignal
             
-            noise=self.getShorterData(self._thzdata_raw[i],starttime,endtime)
-            noise=signal.detrend(noise[:,1])
-#            noise=noise[:,1]
-            precnoise=py.concatenate((precnoise,noise))
-        return precnoise
+        noise=self.getShorterData(tdData,starttime,endtime)
+        noise=signal.detrend(noise[:,1:3],axis=0)
+
+        return noise
+    
+    def getAllPrecNoise(self,timePreceedingSignal=-1):
+        #returns the concatenated Preceeding Noise
+        precNoise=py.array([])
+        for tdData in self._thzdata_raw:
+            tN=self.getPreceedingNoise(tdData,timePreceedingSignal)
+            if precNoise.shape[0]==0:
+                precNoise=tN
+            else:
+                precNoise=py.vstack((precNoise,tN))
+        return precNoise
     
     def calcunc(self,tdDatas):
-        #tdDatas is a np array of tdData measurements
+        #not used anymore
+         #tdDatas is a np array of tdData measurements
         if tdDatas.shape[0]==1:
             repeatability=py.zeros((len(tdDatas[0,:,0]),2))
         else:
             repeatability=py.std(py.asarray(tdDatas[:,:,1:3]),axis=0, ddof = 1)/py.sqrt(self.numberOfDataSets)
-
-        precNoise=self.getPreceedingNoise()
-        elnNoise = py.std(precNoise, ddof = 1)*py.ones(repeatability.shape)/py.sqrt(len(precNoise))
-
+        #this line is wrong
+        elnNoise=tdDatas[0,:,3:]
         uncarray = py.sqrt(repeatability**2 + elnNoise**2)
+        
         return uncarray
-       
+    
+    def getelnNoise(self,tdData):
+        precNoise=self.getPreceedingNoise(tdData)
+        elnNoise = py.std(precNoise, ddof = 1,axis=0)/py.sqrt(precNoise.shape[0])
+        return elnNoise
+                        
+    
     def importfile(self,fname,params):
         # if even more sophisticated things are needed, just inherit THzTdData class
         #and override the importfile method
@@ -131,16 +150,20 @@ class THzTdData():
         #so far only offset removal, think of windowing etc...
         tempTDDatas=[]
         for tdData in tdDatas:
-            #this rotates all signal to X
-#            t=self._rotateToXChannel(tdData)
+            #this rotates all signal to X, adds X and Y uncertainty to each
+            #tdData
+            t=self._rotateToXChannel(tdData)
             #this removes Linear Drifts in X-Channel
-            t=self._removeLinearDrift(tdData)
+            t=self._removeLinearDrift(t)
+            
             tempTDDatas.append(t)
+
         #before interpolating to a common time axis, this need to be a list of 
         #tdData arrays, since they might differ in length
         
-        #first shift maxima on top, than interpolate 
+        #first shift maxima on top, than interpolate, doesn't affect unc array
         tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
+        #also uncertainty is interpolated
         tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
         return tempTDDatas
         
@@ -148,20 +171,28 @@ class THzTdData():
         #this function should remove all signal from Y-Channel
         
         #Calculate lock-in phase:
-        XC=tdData[:,1]
-        YC=tdData[:,2]
+        unc_raw=self.getelnNoise(tdData)
+        XC=unumpy.uarray(tdData[:,1],unc_raw[0])
+        YC=unumpy.uarray(tdData[:,2],unc_raw[1])
         #go to pulse:
-        ix_max=py.argmax(XC)
-        XCs=XC[max(0,ix_max-15):min(len(XC),ix_max+15)]
-        YCs=YC[max(0,ix_max-15):min(len(XC),ix_max+15)]
-        #calculate phase
-        phase=py.arctan(py.mean(YCs/XCs))
+        phase=self._determineLockinPhase(tdData)
+        
         #rotate to XChannel
-        tdData[:,1]=XC*py.cos(phase)-YC*py.sin(phase)
-        tdData[:,2]=XC*py.sin(phase)+YC*py.cos(phase)
+        XC_new=XC*py.cos(phase)+YC*py.sin(phase)
+        YC_new=-XC*py.sin(phase)+YC*py.cos(phase)
+        tdData[:,1]=unumpy.nominal_values(XC_new)
+        tdData[:,2]=unumpy.nominal_values(YC_new)
         
+        unc_new=py.column_stack((unumpy.std_devs(XC_new),unumpy.std_devs(YC_new)))
+        tdData=py.column_stack((tdData,unc_new))
         return tdData
-        
+   
+    def _determineLockinPhase(self,rawtdData):
+        ix_max=py.argmax(rawtdData[:,1])
+        no=4
+        XCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),1]
+        YCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),2]
+        return py.arctan(py.mean(YCs/XCs))
         
         
     def _bringToCommonTimeAxis(self,tdDatas):
@@ -214,7 +245,10 @@ class THzTdData():
   
     def _removeLinearDrift(self,tdData):
         #do this for x and y channel?
+        #overthink use of detrend here!
         tdData[:,1:3]=signal.detrend(tdData[:,1:3],axis=0)
+        #take care in unsymmetric pulses: (hard 20 ?!)
+#        tdData[:,1:3]=tdData[:,1:3]-py.mean(tdData[:20,1:3])
         return tdData
     
     def getInterData(self,tdData,desiredLength,mint,maxt,tkind='linear'):
@@ -233,7 +267,7 @@ class THzTdData():
     
     def getDR(self):
         Emax=abs(self.getEX())
-        noise=py.sqrt(py.mean(self.getPreceedingNoise()**2))
+        noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
         return Emax/noise
     
     def getSNR(self):
@@ -247,6 +281,7 @@ class THzTdData():
         return self.tdData[py.argmax(self.getEX()),0]
     
     def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
+        #might not work for gaussian mode!
         if desiredLength<0:
             return 0
             
@@ -304,8 +339,9 @@ class THzTdData():
         return windowedData
         
     def resetTDData(self):
-        tempdata=self.calcTDData(self._processRawData(self._thzdata_raw))
-        self.setTDData(tempdata)
+        processedData=self._processRawData(self._thzdata_raw)
+        meanData=self.calcTDData(processedData)
+        self.setTDData(meanData)
     
     def doTdPlot(self,name='TD-Plot'):
         py.figure(name)
@@ -477,7 +513,7 @@ class FdData():
         #return asarray _tdData
         #first calculate white noise contribution
         #should be independent of underlying data change!
-        precNoise=py.fft(self._tdData.getPreceedingNoise())
+        precNoise=py.fft(self._tdData.getAllPrecNoise())
         
         #make sure, that no interpolated or zero padded data is used for calculating the 
         #freqeuncy uncertainty, not nice style!
@@ -516,7 +552,7 @@ class FdData():
     
     def getDR(self):
         
-        noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getPreceedingNoise()))**2))
+        noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getAllPrecNoise()[0]))**2))
         window_size=5
         window=py.ones(int(window_size))/float(window_size)
         hlog=py.convolve(20*py.log10(self.getFAbs()), window, 'valid')
@@ -725,10 +761,13 @@ if __name__=='__main__':
 #    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
     samfiles=glob.glob('/home/dave/Dropbox/THz-Analysis/rehi/Sample_?.txt')
     myTDData=ImportMarburgData(samfiles)
+    myTDData.doPlotWithunc()
 
+#    
+#
     myFDData=FdData(myTDData)
-    myFDData.getEtalonSpacing()
-#    myFDData.doPlotWithUnc()
+#    myFDData.getEtalonSpacing()
+    myFDData.doPlotWithUnc()
 #    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
 #    peaks=myFDData.findAbsorptionLines()
 #    peaksS=myFDData.findAbsorptionPeaks_TESTING()
