@@ -57,6 +57,84 @@ class THzTdData():
         #time axis are all equal
         return py.column_stack((tdDatas[0][:,0],meantdData,unc))       
     
+    def calcunc(self,tdDatas):
+        #not used anymore
+         #tdDatas is a np array of tdData measurements
+        if tdDatas.shape[0]==1:
+            repeatability=py.zeros((len(tdDatas[0,:,0]),2))
+        else:
+            repeatability=py.std(py.asarray(tdDatas[:,:,1:3]),axis=0, ddof = 1)/py.sqrt(self.numberOfDataSets)
+        #this line is wrong
+        elnNoise=tdDatas[0,:,3:]
+        uncarray = py.sqrt(repeatability**2 + elnNoise**2)
+        
+        return uncarray
+    
+    def doTdPlot(self,name='TD-Plot'):
+        py.figure(name)
+        py.plot(self.getTimesPs(),self.getEX())      
+        py.plot(self.getTimesPs(),self.getEY())      
+        py.xlabel('Time in ps')
+        py.ylabel('Amplitude, arb. units')
+        
+    def doPlotWithunc(self,no_std=2):
+        self.doTdPlot('TD-UNC-Plot')
+        py.plot(self.getTimesPs(),self.getEX()+no_std*self.getUncEX(),'g--')
+        py.plot(self.getTimesPs(),self.getEX()-no_std*self.getUncEX(),'g--')
+        py.plot(self.getTimesPs(),self.getEY()+no_std*self.getUncEY(),'g--')
+        py.plot(self.getTimesPs(),self.getEY()-no_std*self.getUncEY(),'g--')    
+    
+    def getAllPrecNoise(self,timePreceedingSignal=-1):
+        #returns the concatenated Preceeding Noise
+        precNoise=py.array([])
+        for tdData in self._thzdata_raw:
+            tN=self.getPreceedingNoise(tdData,timePreceedingSignal)
+            if precNoise.shape[0]==0:
+                precNoise=tN
+            else:
+                precNoise=py.vstack((precNoise,tN))
+        return precNoise
+    
+    def getDR(self):
+        Emax=abs(self.getEX())
+        noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
+        return Emax/noise
+    
+    def getelnNoise(self,tdData):
+        precNoise=self.getPreceedingNoise(tdData)
+        elnNoise = py.std(precNoise, ddof = 1,axis=0)/py.sqrt(precNoise.shape[0])
+        return elnNoise
+       
+    def getEX(self):
+        return self.tdData[:,1]
+        
+    def getEY(self):
+        return self.tdData[:,2]
+
+    def getfilename(self):
+        return self.filename
+        
+    def getFirstPuls(self,after):
+        tcenter=self.getPeakPosition()
+        #assume width of the pulse to be not more than 10ps!, further crop always from
+        #the beginning of the time data, in order to avoid phase problems
+        
+        tmax=tcenter+after
+        return self.getShorterData(self.tdData,self.getTimes()[0],tmax)
+        
+    def getInterData(self,tdData,desiredLength,mint,maxt,tkind='linear'):
+        #use cubic interpolation only, if you know, that the data is not too no
+        intpdata=interp1d(tdData[:,0],tdData[:,1:],axis=0,kind=tkind)
+        timeaxis=py.linspace(mint,maxt,desiredLength)
+        longerData=intpdata(timeaxis)
+        return py.column_stack((timeaxis,longerData))
+
+    def getLength(self):
+        return len(self.getTimes())
+
+    def getPeakPosition(self):
+        return self.tdData[py.argmax(self.getEX()),0]
+    
     def getPreceedingNoise(self,tdData,timePreceedingSignal=-1):
         #check for reasonable input
         #peak position in raw data is always at origin!
@@ -80,39 +158,43 @@ class THzTdData():
             
         noise=self.getShorterData(tdData,starttime,endtime)
         noise=signal.detrend(noise[:,1:3],axis=0)
-
         return noise
+
+    def getSNR(self):
+        return abs(self.getEX())/self.getUncEX()
+
+    def getShorterData(self,tdData,tmin,tmax):
+        ix=py.all([tdData[:,0]>=tmin,tdData[:,0]<tmax],axis=0)
+        return tdData[ix,:]
     
-    def getAllPrecNoise(self,timePreceedingSignal=-1):
-        #returns the concatenated Preceeding Noise
-        precNoise=py.array([])
-        for tdData in self._thzdata_raw:
-            tN=self.getPreceedingNoise(tdData,timePreceedingSignal)
-            if precNoise.shape[0]==0:
-                precNoise=tN
-            else:
-                precNoise=py.vstack((precNoise,tN))
-        return precNoise
+    def getTimes(self):
+        return self.tdData[:,0]
+
+    def getTimesPs(self):
+        return self.getTimes()*1e12
+
+    def getTimeWindowLength(self):
+        peak=self.getPeakPosition()
+        return abs(self.tdData[-1,0]-peak)
     
-    def calcunc(self,tdDatas):
-        #not used anymore
-         #tdDatas is a np array of tdData measurements
-        if tdDatas.shape[0]==1:
-            repeatability=py.zeros((len(tdDatas[0,:,0]),2))
-        else:
-            repeatability=py.std(py.asarray(tdDatas[:,:,1:3]),axis=0, ddof = 1)/py.sqrt(self.numberOfDataSets)
-        #this line is wrong
-        elnNoise=tdDatas[0,:,3:]
-        uncarray = py.sqrt(repeatability**2 + elnNoise**2)
-        
-        return uncarray
+    def getUncEX(self):
+        return self.tdData[:,3]
     
-    def getelnNoise(self,tdData):
-        precNoise=self.getPreceedingNoise(tdData)
-        elnNoise = py.std(precNoise, ddof = 1,axis=0)/py.sqrt(precNoise.shape[0])
-        return elnNoise
-                        
+    def getUncEY(self):
+        return self.tdData[:,4]
     
+    def getWindowedData(self,windowlength_time=1e-12):
+        N=int(windowlength_time/self.dt)
+        w=py.blackman(N*2)
+        w=py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:]))
+        windowedData=self.tdData
+        windowedData[:,1]*=w
+        windowedData[:,2]*=w
+        windowedData[:,3]*=w
+        windowedData[:,4]*=w
+        return windowedData
+    
+
     def importfile(self,fname,params):
         # if even more sophisticated things are needed, just inherit THzTdData class
         #and override the importfile method
@@ -145,55 +227,46 @@ class THzTdData():
             data=py.flipud(data)
      
         return data
+    
+    def resetTDData(self):
+        processedData=self._processRawData(self._thzdata_raw)
+        meanData=self.calcTDData(processedData)
+        self.setTDData(meanData)
+ 
+    def setTDData(self,tdData):
+        #if tdData array is changed outside, use this function, to guarantee data integrity
 
-    def _processRawData(self,tdDatas):
-        #so far only offset removal, think of windowing etc...
-        tempTDDatas=[]
-        for tdData in tdDatas:
-            #this rotates all signal to X, adds X and Y uncertainty to each
-            #tdData
-            t=self._rotateToXChannel(tdData)
-            #this removes Linear Drifts in X-Channel
-            t=self._removeLinearDrift(t)
+        self.tdData=tdData
+        self.dt=abs(py.mean(tdData[10:20,0]-tdData[9:19,0]))       
+#        self.dt=(tdData[-1,0]-tdData[0,0])/len(tdData[:,0])
+        self.num_points=len(tdData[:,0])
+
+    def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
+        #might not work for gaussian mode!
+        if desiredLength<0:
+            return 0
             
-            tempTDDatas.append(t)
-
-        #before interpolating to a common time axis, this need to be a list of 
-        #tdData arrays, since they might differ in length
+        desiredLength=int(desiredLength)
         
-        #first shift maxima on top, than interpolate, doesn't affect unc array
-        tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
-        #also uncertainty is interpolated
-        tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
-        return tempTDDatas
-        
-    def _rotateToXChannel(self,tdData):
-        #this function should remove all signal from Y-Channel
-        
-        #Calculate lock-in phase:
-        unc_raw=self.getelnNoise(tdData)
-        XC=unumpy.uarray(tdData[:,1],unc_raw[0])
-        YC=unumpy.uarray(tdData[:,2],unc_raw[1])
-        #go to pulse:
-        phase=self._determineLockinPhase(tdData)
-        
-        #rotate to XChannel
-        XC_new=XC*py.cos(phase)+YC*py.sin(phase)
-        YC_new=-XC*py.sin(phase)+YC*py.cos(phase)
-        tdData[:,1]=unumpy.nominal_values(XC_new)
-        tdData[:,2]=unumpy.nominal_values(YC_new)
-        
-        unc_new=py.column_stack((unumpy.std_devs(XC_new),unumpy.std_devs(YC_new)))
-        tdData=py.column_stack((tdData,unc_new))
-        return tdData
-   
-    def _determineLockinPhase(self,rawtdData):
-        ix_max=py.argmax(rawtdData[:,1])
-        no=4
-        XCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),1]
-        YCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),2]
-        return py.arctan(py.mean(YCs/XCs))
-        
+        if paddmode=='gaussian':
+            paddvec=py.normal(0,py.std(self.getPreceedingNoise())*0.05,desiredLength)
+                                
+        else:
+            paddvec=py.ones((desiredLength,self.tdData.shape[1]-1))
+            paddvec*=py.mean(self.tdData[-20:,1:])
+            
+        timevec=self.getTimes()
+        if where=='end':
+            #timeaxis:
+            newtimes=py.linspace(timevec[-1],timevec[-1]+desiredLength*self.dt,desiredLength)
+            paddvec=py.column_stack((newtimes,paddvec))
+            longvec=py.row_stack((self.tdData,paddvec))
+        else:
+            newtimes=py.linspace(timevec[0]-(desiredLength+1)*self.dt,timevec[0],desiredLength)
+            paddvec=py.column_stack((newtimes,paddvec))
+            longvec=py.row_stack((paddvec,self.tdData))
+            
+        self.setTDData(longvec)
         
     def _bringToCommonTimeAxis(self,tdDatas):
         #What can happen: 
@@ -226,6 +299,42 @@ class THzTdData():
         
         return py.asarray(tdDatas)
     
+    def _determineLockinPhase(self,rawtdData):
+        ix_max=py.argmax(rawtdData[:,1])
+        no=4
+        XCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),1]
+        YCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),2]
+        return py.arctan(py.mean(YCs/XCs))
+    
+    def _processRawData(self,tdDatas):
+        #so far only offset removal, think of windowing etc...
+        tempTDDatas=[]
+        for tdData in tdDatas:
+            #this rotates all signal to X, adds X and Y uncertainty to each
+            #tdData
+            t=self._rotateToXChannel(tdData)
+            #this removes Linear Drifts in X-Channel
+            t=self._removeLinearDrift(t)
+            
+            tempTDDatas.append(t)
+
+        #before interpolating to a common time axis, this need to be a list of 
+        #tdData arrays, since they might differ in length
+        
+        #first shift maxima on top, than interpolate, doesn't affect unc array
+        tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
+        #also uncertainty is interpolated
+        tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
+        return tempTDDatas
+
+    def _removeLinearDrift(self,tdData):
+        #do this for x and y channel?
+        #overthink use of detrend here!
+        tdData[:,1:3]=signal.detrend(tdData[:,1:3],axis=0)
+        #take care in unsymmetric pulses: (hard 20 ?!)
+#        tdData[:,1:3]=tdData[:,1:3]-py.mean(tdData[:20,1:3])
+        return tdData
+    
     def _removeTimeShift(self,tdDatas):
         #not sure if needed, maybe we want to correct the rawdata by shifting the maxima on top of each other
         #the indices of the maxima        
@@ -242,139 +351,27 @@ class THzTdData():
         for i in range(len(tdDatas)):
             tdDatas[i][:,0]-=(peak_pos[i]-mp)
         return tdDatas,py.std(peak_pos)
-  
-    def _removeLinearDrift(self,tdData):
-        #do this for x and y channel?
-        #overthink use of detrend here!
-        tdData[:,1:3]=signal.detrend(tdData[:,1:3],axis=0)
-        #take care in unsymmetric pulses: (hard 20 ?!)
-#        tdData[:,1:3]=tdData[:,1:3]-py.mean(tdData[:20,1:3])
+
+    def _rotateToXChannel(self,tdData):
+        #this function should remove all signal from Y-Channel
+        
+        #Calculate lock-in phase:
+        unc_raw=self.getelnNoise(tdData)
+        XC=unumpy.uarray(tdData[:,1],unc_raw[0])
+        YC=unumpy.uarray(tdData[:,2],unc_raw[1])
+        #go to pulse:
+        phase=self._determineLockinPhase(tdData)
+        
+        #rotate to XChannel
+        XC_new=XC*py.cos(phase)+YC*py.sin(phase)
+        YC_new=-XC*py.sin(phase)+YC*py.cos(phase)
+        tdData[:,1]=unumpy.nominal_values(XC_new)
+        tdData[:,2]=unumpy.nominal_values(YC_new)
+        
+        unc_new=py.column_stack((unumpy.std_devs(XC_new),unumpy.std_devs(YC_new)))
+        tdData=py.column_stack((tdData,unc_new))
         return tdData
-    
-    def getInterData(self,tdData,desiredLength,mint,maxt,tkind='linear'):
-        #use cubic interpolation only, if you know, that the data is not too no
-        intpdata=interp1d(tdData[:,0],tdData[:,1:],axis=0,kind=tkind)
-        timeaxis=py.linspace(mint,maxt,desiredLength)
-        longerData=intpdata(timeaxis)
-        return py.column_stack((timeaxis,longerData))
-#            return py.transpose(py.asarray([timeaxis,longerData]))
-    
-    def getLength(self):
-        return len(self.getTimes())
-        
-    def getfilename(self):
-        return self.filename
-    
-    def getDR(self):
-        Emax=abs(self.getEX())
-        noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
-        return Emax/noise
-    
-    def getSNR(self):
-        return abs(self.getEX())/self.getUncEX()
-    
-    def getTimeWindowLength(self):
-        peak=self.getPeakPosition()
-        return abs(self.tdData[-1,0]-peak)
-    
-    def getPeakPosition(self):
-        return self.tdData[py.argmax(self.getEX()),0]
-    
-    def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
-        #might not work for gaussian mode!
-        if desiredLength<0:
-            return 0
-            
-        desiredLength=int(desiredLength)
-        
-        if paddmode=='gaussian':
-            paddvec=py.normal(0,py.std(self.getPreceedingNoise())*0.05,desiredLength)
-                                
-        else:
-            paddvec=py.ones((desiredLength,self.tdData.shape[1]-1))
-            paddvec*=py.mean(self.tdData[-20:,1:])
-            
-        timevec=self.getTimes()
-        if where=='end':
-            #timeaxis:
-            newtimes=py.linspace(timevec[-1],timevec[-1]+desiredLength*self.dt,desiredLength)
-            paddvec=py.column_stack((newtimes,paddvec))
-            longvec=py.row_stack((self.tdData,paddvec))
-        else:
-            newtimes=py.linspace(timevec[0]-(desiredLength+1)*self.dt,timevec[0],desiredLength)
-            paddvec=py.column_stack((newtimes,paddvec))
-            longvec=py.row_stack((paddvec,self.tdData))
-            
-        self.setTDData(longvec)
-            
-    def getFirstPuls(self,after):
-        tcenter=self.getPeakPosition()
-        #assume width of the pulse to be not more than 10ps!, further crop always from
-        #the beginning of the time data, in order to avoid phase problems
-        
-        tmax=tcenter+after
-        return self.getShorterData(self.tdData,self.getTimes()[0],tmax)
-    
-    def getShorterData(self,tdData,tmin,tmax):
-        ix=py.all([tdData[:,0]>=tmin,tdData[:,0]<tmax],axis=0)
-        return tdData[ix,:]
-    
-    def setTDData(self,tdData):
-        #if tdData array is changed outside, use this function, to guarantee data integrity
 
-        self.tdData=tdData
-        self.dt=abs(py.mean(tdData[10:20,0]-tdData[9:19,0]))       
-#        self.dt=(tdData[-1,0]-tdData[0,0])/len(tdData[:,0])
-        self.num_points=len(tdData[:,0])
-
-    def getWindowedData(self,windowlength_time=1e-12):
-        N=int(windowlength_time/self.dt)
-        w=py.blackman(N*2)
-        w=py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:]))
-        windowedData=self.tdData
-        windowedData[:,1]*=w
-        windowedData[:,2]*=w
-        windowedData[:,3]*=w
-        windowedData[:,4]*=w
-        return windowedData
-        
-    def resetTDData(self):
-        processedData=self._processRawData(self._thzdata_raw)
-        meanData=self.calcTDData(processedData)
-        self.setTDData(meanData)
-    
-    def doTdPlot(self,name='TD-Plot'):
-        py.figure(name)
-        py.plot(self.getTimesPs(),self.getEX())      
-        py.plot(self.getTimesPs(),self.getEY())      
-        py.xlabel('Time in ps')
-        py.ylabel('Amplitude, arb. units')
-        
-    def doPlotWithunc(self,no_std=2):
-        self.doTdPlot('TD-UNC-Plot')
-        py.plot(self.getTimesPs(),self.getEX()+no_std*self.getUncEX(),'g--')
-        py.plot(self.getTimesPs(),self.getEX()-no_std*self.getUncEX(),'g--')
-        py.plot(self.getTimesPs(),self.getEY()+no_std*self.getUncEY(),'g--')
-        py.plot(self.getTimesPs(),self.getEY()-no_std*self.getUncEY(),'g--')
-
-
-    def getTimes(self):
-        return self.tdData[:,0]
-
-    def getTimesPs(self):
-        return self.getTimes()*1e12
-        
-    def getEX(self):
-        return self.tdData[:,1]
-    
-    def getUncEX(self):
-        return self.tdData[:,3]
-        
-    def getEY(self):
-        return self.tdData[:,2]
-    
-    def getUncEY(self):
-        return self.tdData[:,4]
         
 class ImportMarburgData(THzTdData):
 
@@ -419,71 +416,6 @@ class FdData():
         self.resetfdData(fbins,fbnds)
         self.maxDR=max(self.getDR())
 
-    def getInterpolatedFDData(self,newfbins,strmode='linear'):
-        #not only for this function, also for others maybe useful: 
-        #check if it is possible to give as an argument a slice, i.e.
-        # '1:' for interpolating all data, '3' for only the absdata and so on 
-        oldfreqs=self.getfreqs()
-        newfreqs=py.arange(min(oldfreqs),max(oldfreqs),newfbins)
-        
-        interfdData=interp1d(oldfreqs,self.fdData[:,1:],strmode,axis=0)
-        
-        return py.column_stack((newfreqs,interfdData(newfreqs)))
-     
-      
-    def setTDData(self,tdData):
-        #Neccessary? couldn't we just create a new object with init?
-        fbins_old=self.getfbins()
-        minf_old=min(self.getfreqs())
-        maxf_old=max(self.getfreqs())
-        self._tdData=tdData        
-        self.setFDData(self.calculatefdData(self._tdData))
-        
-        self.resetfdData(fbins_old,[minf_old,maxf_old])
-
-    def setFDData(self,fdData):
-        self.fdData=fdData
-        
-    def getassTDData(self):
-        return self._tdData
-    
-    def resetfdData(self,fbins=-1,fbnds=[FMIN,FMAX]):
-
-        if fbins>0 and self.getfbins()>fbins:
-            self.zeroPadd(fbins)
-            
-        self.setFDData(self.getcroppedData(self.fdData,fbnds[0],fbnds[1]))
-
-    def zeroPadd(self,fbins):
-        spac=1/self._tdData.dt/fbins
-        actlen=self._tdData.getLength()
-        nozeros=py.ceil(spac-actlen)
-        self._tdData.zeroPaddData(nozeros)
-        #leave the old bnds in place
-        bnds=[min(self.getfreqs()),max(self.getfreqs())]
-        zpd=self.calculatefdData(self._tdData)
-        self.setFDData(self.getcroppedData(zpd,bnds[0],bnds[1]))
-        
-    def getcroppedData(self,data,startfreq=FMIN,endfreq=FMAX):
-        ix=py.all([data[:,0]>=startfreq,data[:,0]<=endfreq],axis=0)
-        return data[ix,:]
-    
-    def getfbins(self):
-        #this is ok
-        return abs(self.fdData[1,0]-self.fdData[0,0])
-    
-    def getfreqs(self):
-        return self.fdData[:,0]
-
-    def getfreqsGHz(self):
-        return self.getfreqs()*1e-9         
-    
-    def getmaxfreq(self):
-        #take care of constant offset what is the best lower range?
-        cutted=self.getcroppedData(self.fdData,150e9,FdData.FMAX)
-        fmax=cutted[py.argmax(cutted[:,2]),0]
-        return fmax
-    
     def calculatefdData(self,tdData):
         #this could also be avoided, since it doesn't change in most of the cases
         unc=self.calculateSTDunc()
@@ -500,14 +432,6 @@ class FdData():
         intpunc=interp1d(unc[:,0],unc[:,1:],axis=0)        
         unc=intpunc(t[:,0])
         return py.column_stack((t,unc))
-    
-    def removePhaseOffset(self,freqs,ph,startfreq=200e9,endfreq=1e12):
-        #cut phase to reasonable range:
-        ph_c=self.getcroppedData(py.column_stack((freqs,ph)),startfreq,endfreq)
-        #determine the slope and the offset        
-        p=py.polyfit(ph_c[:,0],ph_c[:,1],1)
-        #return full phase-offset(croppedPhase)
-        return ph-p[1]
 
     def calculateSTDunc(self):
         #return asarray _tdData
@@ -549,30 +473,34 @@ class FdData():
         t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real**2),py.sqrt(noise_imag**2+repeat_noise_imag**2)))
         t=py.column_stack((t,py.sqrt(noise_abs**2+repeat_noise_abs**2),py.sqrt(noise_ph**2+repeat_noise_ph**2)))        
         return self.getcroppedData(t)    
-    
-    def getDR(self):
-        
-        noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getAllPrecNoise()[0]))**2))
-        window_size=5
-        window=py.ones(int(window_size))/float(window_size)
-        hlog=py.convolve(20*py.log10(self.getFAbs()), window, 'valid')
-        one=py.ones((2,))
-        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
-        return hlog-20*py.log10(noiselevel)         
-    
-    def getSNR(self):
-        return self.getFAbs()/self.getFAbsUnc()
-        
-    def getBandwidth(self,dbDistancetoNoise=15):
-        #this function should return the lowest trustable and highest trustable frequency, 
-        # along with the resulting bandwidth
-        
-        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
-        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
-        tfr=self.getfreqs()[ix]
 
-        return min(tfr),max(tfr)
+    def doPlot(self):
+
+        py.figure('FD-ABS-Plot')
+        py.plot(self.getfreqsGHz(),20*py.log10(self.getFAbs()))
+        py.xlabel('Frequency in GHz')
+        py.ylabel('Amplitude, arb. units')
         
+        py.figure('FD-PHASE-Plot')
+        py.plot(self.getfreqsGHz(),self.getFPh())   
+             
+    def doPlotWithUnc(self):
+        f=1
+
+        uabs=unumpy.uarray(self.getFAbs(),self.getFAbsUnc())
+        #scale the uncertainty for the 20*log10 plot
+        uabs=20*unumpy.log10(uabs)
+        u_a=unumpy.nominal_values(uabs)
+        u_s=unumpy.std_devs(uabs)
+        
+        py.figure('FD-ABS-UNC-Plot')
+        py.plot(self.getfreqsGHz(),u_a)
+        py.plot(self.getfreqsGHz(),u_a+u_s,'--',self.getfreqsGHz(),u_a-u_s,'--')
+
+        py.figure('FD-PH-UNC-Plot')
+        py.plot(self.getfreqsGHz(),self.getFPh())
+        py.plot(self.getfreqsGHz(),self.getFPh()+f*self.getFPhUnc(),'--',self.getfreqsGHz(),self.getFPh()+self.getFPhUnc(),'--')
+
     def findAbsorptionLines(self):
         #no interpolation here, just return the measured data peak index
         tresh=6 #db treshhold to detect a line
@@ -641,8 +569,34 @@ class FdData():
             
         #if len(peaks)>2:
         #(peakfreqs[1]-peakfreqs[0])
-   
     
+    def getassTDData(self):
+        return self._tdData
+
+    def getBandwidth(self,dbDistancetoNoise=15):
+        #this function should return the lowest trustable and highest trustable frequency, 
+        # along with the resulting bandwidth
+        
+        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
+        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
+        tfr=self.getfreqs()[ix]
+
+        return min(tfr),max(tfr)
+
+    def getcroppedData(self,data,startfreq=FMIN,endfreq=FMAX):
+        ix=py.all([data[:,0]>=startfreq,data[:,0]<=endfreq],axis=0)
+        return data[ix,:]
+
+    def getDR(self):
+        
+        noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getAllPrecNoise()[0]))**2))
+        window_size=5
+        window=py.ones(int(window_size))/float(window_size)
+        hlog=py.convolve(20*py.log10(self.getFAbs()), window, 'valid')
+        one=py.ones((2,))
+        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
+        return hlog-20*py.log10(noiselevel)         
+
     def getEtalonSpacing(self):
         #how to find a stable range! ? 
 #        etalonData=self.getFilteredData(20e9,3)
@@ -665,6 +619,28 @@ class FdData():
         print(str(df/1e9) + " GHz estimated etalon frequency")
         return df
 
+    def getFReal(self):
+        return self.fdData[:,1]
+    def getFImag(self):
+        return self.fdData[:,2]
+    def getFAbs(self):
+        return self.fdData[:,3]
+    def getFPh(self):
+        return self.fdData[:,4]
+    def getFRealUnc(self):
+        return self.fdData[:,5]
+    def getFImagUnc(self):
+        return self.fdData[:,6]
+    def getFAbsUnc(self):
+        #maybe the calculation can also be done here, since it is not needed often
+        return self.fdData[:,7]
+    def getFPhUnc(self):
+        return self.fdData[:,8]
+
+    def getfbins(self):
+        #this is ok
+        return abs(self.fdData[1,0]-self.fdData[0,0])
+
     def getFilteredData(self,windowlen=100e9,maxorder=3):
         #windowlength should be smaller the etalon frequency, in order to emphasize them
         #for the length algorithm
@@ -683,6 +659,32 @@ class FdData():
        
         return py.column_stack((self.fdData[:,:3],absdata,phdata,self.fdData[:,5:]))
     
+    def getfreqs(self):
+        return self.fdData[:,0]
+
+    def getfreqsGHz(self):
+        return self.getfreqs()*1e-9         
+
+    def getInterpolatedFDData(self,newfbins,strmode='linear'):
+        #not only for this function, also for others maybe useful: 
+        #check if it is possible to give as an argument a slice, i.e.
+        # '1:' for interpolating all data, '3' for only the absdata and so on 
+        oldfreqs=self.getfreqs()
+        newfreqs=py.arange(min(oldfreqs),max(oldfreqs),newfbins)
+        
+        interfdData=interp1d(oldfreqs,self.fdData[:,1:],strmode,axis=0)
+        
+        return py.column_stack((newfreqs,interfdData(newfreqs)))
+
+    def getLength(self):
+        return self.fdData.shape[0]
+    
+    def getmaxfreq(self):
+        #take care of constant offset what is the best lower range?
+        cutted=self.getcroppedData(self.fdData,150e9,FdData.FMAX)
+        fmax=cutted[py.argmax(cutted[:,2]),0]
+        return fmax
+
     def getmovingAveragedData(self,window_size_GHz=-1):
         #so far unelegant way of convolving the columns one by one
         if window_size_GHz<0.5e9:
@@ -700,32 +702,36 @@ class FdData():
         dataph=py.concatenate((dataph[0]*one,dataph,dataph[-1]*one))
         return py.column_stack((self.fdData[:,:3],dataabs,dataph,self.fdData[:,5:]))
     
-    def doPlot(self):
+    def getSNR(self):
+        return self.getFAbs()/self.getFAbsUnc()
 
-        py.figure('FD-ABS-Plot')
-        py.plot(self.getfreqsGHz(),20*py.log10(self.getFAbs()))
-        py.xlabel('Frequency in GHz')
-        py.ylabel('Amplitude, arb. units')
+    def removePhaseOffset(self,freqs,ph,startfreq=200e9,endfreq=1e12):
+        #cut phase to reasonable range:
+        ph_c=self.getcroppedData(py.column_stack((freqs,ph)),startfreq,endfreq)
+        #determine the slope and the offset        
+        p=py.polyfit(ph_c[:,0],ph_c[:,1],1)
+        #return full phase-offset(croppedPhase)
+        return ph-p[1]
+     
+    def resetfdData(self,fbins=-1,fbnds=[FMIN,FMAX]):
+
+        if fbins>0 and self.getfbins()>fbins:
+            self.zeroPadd(fbins)
+            
+        self.setFDData(self.getcroppedData(self.fdData,fbnds[0],fbnds[1]))
+      
+    def setTDData(self,tdData):
+        #Neccessary? couldn't we just create a new object with init?
+        fbins_old=self.getfbins()
+        minf_old=min(self.getfreqs())
+        maxf_old=max(self.getfreqs())
+        self._tdData=tdData        
+        self.setFDData(self.calculatefdData(self._tdData))
         
-        py.figure('FD-PHASE-Plot')
-        py.plot(self.getfreqsGHz(),self.getFPh())   
-             
-    def doPlotWithUnc(self):
-        f=1
+        self.resetfdData(fbins_old,[minf_old,maxf_old])
 
-        uabs=unumpy.uarray(self.getFAbs(),self.getFAbsUnc())
-        #scale the uncertainty for the 20*log10 plot
-        uabs=20*unumpy.log10(uabs)
-        u_a=unumpy.nominal_values(uabs)
-        u_s=unumpy.std_devs(uabs)
-        
-        py.figure('FD-ABS-UNC-Plot')
-        py.plot(self.getfreqsGHz(),u_a)
-        py.plot(self.getfreqsGHz(),u_a+u_s,'--',self.getfreqsGHz(),u_a-u_s,'--')
-
-        py.figure('FD-PH-UNC-Plot')
-        py.plot(self.getfreqsGHz(),self.getFPh())
-        py.plot(self.getfreqsGHz(),self.getFPh()+f*self.getFPhUnc(),'--',self.getfreqsGHz(),self.getFPh()+self.getFPhUnc(),'--')
+    def setFDData(self,fdData):
+        self.fdData=fdData
 
     def setPhase(self,newPh):
         if len(newPh)!=self.getLength():
@@ -733,27 +739,15 @@ class FdData():
         else:
             self.fdData[:,4]=newPh
 
-    def getFReal(self):
-        return self.fdData[:,1]
-    def getFImag(self):
-        return self.fdData[:,2]
-    def getFAbs(self):
-        return self.fdData[:,3]
-    def getFPh(self):
-        return self.fdData[:,4]
-    def getFRealUnc(self):
-        return self.fdData[:,5]
-    def getFImagUnc(self):
-        return self.fdData[:,6]
-    def getFAbsUnc(self):
-        #maybe the calculation can also be done here, since it is not needed often
-        return self.fdData[:,7]
-    
-    def getFPhUnc(self):
-        return self.fdData[:,8]
-    
-    def getLength(self):
-        return self.fdData.shape[0]
+    def zeroPadd(self,fbins):
+        spac=1/self._tdData.dt/fbins
+        actlen=self._tdData.getLength()
+        nozeros=py.ceil(spac-actlen)
+        self._tdData.zeroPaddData(nozeros)
+        #leave the old bnds in place
+        bnds=[min(self.getfreqs()),max(self.getfreqs())]
+        zpd=self.calculatefdData(self._tdData)
+        self.setFDData(self.getcroppedData(zpd,bnds[0],bnds[1]))
 
 if __name__=='__main__':
     import glob

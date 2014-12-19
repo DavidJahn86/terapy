@@ -20,37 +20,26 @@ class HMeas(FdData):
         else:
             self.fdData=self.calculatefdData()
         self.maxDR=max(self.getDR())
-    #functions that need to be overridden
-    def getDR(self):
-         return self.fdsam.getDR()
-            
-    def resetfdData(self,fbins=-1,fbnds=[FdData.FMIN,FdData.FMAX]):
-            minrf,maxrf=self.fdref.getBandwidth()
-            minsf,maxsf=self.fdsam.getBandwidth()
-            
-            self.manipulateFDData(fbins,[max(minrf,minsf,FdData.FMIN),min(maxrf,maxsf,FdData.FMAX)])
-
-    def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
-        #this method provides the means to change the underlying fdData objects and recalculate H
-        #if just an interpolated H with fbins is needed, use getInterpolatedFdData from FdData class        
-               
-        if fbins>0.5e9:
-            if mode=='zeropadd':
-                self.zeroPadd(fbins)
-            else:
-                self.fdref.setFDData(self.fdref.getInterpolatedFDData(fbins))
-                self.fdsam.setFDData(self.fdsam.getInterpolatedFDData(fbins))
-               
-        self.fdref.setFDData(self.fdref.getcroppedData(self.fdref.fdData,fbnds[0],fbnds[1]))        
-        self.fdsam.setFDData(self.fdsam.getcroppedData(self.fdsam.fdData,fbnds[0],fbnds[1]))
-        
-        self.fdData=self.calculatefdData()
-   
-    def zeroPadd(self,fbins):
-        self.fdref.zeroPadd(fbins)
-        self.fdsam.zeroPadd(fbins)
-        self.calculatefdData()
     
+    def calculatefdData(self):
+        #this function overrides the original fdData (that takes normally a tdData and does the fft)
+        #here instead we use the fdref and fdsam objects to calculate H
+        
+        prob_str=self._checkDataIntegrity()
+        if not prob_str=='good':
+            print("interpolation required")
+            print(prob_str)
+            self._commonFreqSamRef(prob_str)
+        
+        H_unc=self.calculateSTDunc()
+            #take care that abs(H) is always smaller one!
+            #try if this increases the data quality!
+#            H_ph=py.unwrap(py.angle(self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]))
+        H_ph=self.fdref.getFPh()-self.fdsam.getFPh()
+        H=(self.fdsam.getFReal()+1j*self.fdsam.getFImag())/(self.fdref.getFReal()+1j*self.fdref.getFImag())
+        H=py.column_stack((self.fdref.getfreqs(),H.real,H.imag,abs(H),H_ph,H_unc))
+        return H    
+
     def calculateSTDunc(self):  
         #this function should give the same result as using uncertainty package with the previously
         #correctly calculated uncertainties of reference and sample measurements
@@ -89,6 +78,69 @@ class HMeas(FdData):
         H_uncph=unumpy.std_devs(Ephsam-Ephref)
         return py.column_stack((py.sqrt(H_unc_real2),py.sqrt(H_unc_imag2),H_uncabs,H_uncph))
     
+    def doPlot(self):
+        freqs=self.getfreqsGHz()
+        
+        py.figure('H-UNC-Plot')
+        py.plot(freqs,self.getFReal())
+        py.plot(freqs,self.getFImag())
+        py.plot(freqs,self.getFReal()+self.getFRealUnc(),'g--',freqs,self.getFReal()-self.getFRealUnc(),'g--')
+        py.plot(freqs,self.getFImag()+self.getFImagUnc(),'g--',freqs,self.getFImag()-self.getFImagUnc(),'g--')
+        py.xlabel('Frequency in GHz')
+        py.ylabel('Transfer Function')
+        py.legend(('H_real','H_imag'))
+#        
+        py.figure('H-PHASE-Plot')
+        py.plot(freqs,self.getFPh())
+       
+        py.figure('H-ABS-Plot')
+        py.plot(freqs,self.getFAbs())
+        
+    def estimateLDavid(self):
+        #crop frequency axis
+        rdata=self.getcroppedData(self.fdData,200e9,1e12)
+        #calculate phase change
+        p=py.polyfit(rdata[:,0],rdata[:,4],1)        
+        kappa=abs(p[0])
+#        py.figure()
+#        py.plot(rdata[:,0],rdata[:,-1])
+        df=self.getEtalonSpacing()
+        #assume air around
+        n=1.0/(1.00027-kappa*df/py.pi)
+        l=c/2.0*(1.00027/df-kappa/py.pi)
+        return [l,n]
+
+    #functions that need to be overridden
+    def getDR(self):
+         return self.fdsam.getDR()
+            
+    def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
+        #this method provides the means to change the underlying fdData objects and recalculate H
+        #if just an interpolated H with fbins is needed, use getInterpolatedFdData from FdData class        
+               
+        if fbins>0.5e9:
+            if mode=='zeropadd':
+                self.zeroPadd(fbins)
+            else:
+                self.fdref.setFDData(self.fdref.getInterpolatedFDData(fbins))
+                self.fdsam.setFDData(self.fdsam.getInterpolatedFDData(fbins))
+               
+        self.fdref.setFDData(self.fdref.getcroppedData(self.fdref.fdData,fbnds[0],fbnds[1]))        
+        self.fdsam.setFDData(self.fdsam.getcroppedData(self.fdsam.fdData,fbnds[0],fbnds[1]))
+        
+        self.fdData=self.calculatefdData()
+
+    def resetfdData(self,fbins=-1,fbnds=[FdData.FMIN,FdData.FMAX]):
+            minrf,maxrf=self.fdref.getBandwidth()
+            minsf,maxsf=self.fdsam.getBandwidth()
+            
+            self.manipulateFDData(fbins,[max(minrf,minsf,FdData.FMIN),min(maxrf,maxsf,FdData.FMAX)])
+        
+    def zeroPadd(self,fbins):
+        self.fdref.zeroPadd(fbins)
+        self.fdsam.zeroPadd(fbins)
+        self.calculatefdData()
+
     def _checkDataIntegrity(self):
         tdrefData=self.fdref.getassTDData()
         tdsamData=self.fdsam.getassTDData()
@@ -142,58 +194,6 @@ class HMeas(FdData):
         
         self.fdref=FdData(tdrefnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])
         self.fdsam=FdData(tdsamnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])  
-
-    def calculatefdData(self):
-        #this function overrides the original fdData (that takes normally a tdData and does the fft)
-        #here instead we use the fdref and fdsam objects to calculate H
-        
-        prob_str=self._checkDataIntegrity()
-        if not prob_str=='good':
-            print("interpolation required")
-            print(prob_str)
-            self._commonFreqSamRef(prob_str)
-        
-        H_unc=self.calculateSTDunc()
-            #take care that abs(H) is always smaller one!
-            #try if this increases the data quality!
-#            H_ph=py.unwrap(py.angle(self.fdsam.fdData[:,1]/self.fdref.fdData[:,1]))
-        H_ph=self.fdref.getFPh()-self.fdsam.getFPh()
-        H=(self.fdsam.getFReal()+1j*self.fdsam.getFImag())/(self.fdref.getFReal()+1j*self.fdref.getFImag())
-        H=py.column_stack((self.fdref.getfreqs(),H.real,H.imag,abs(H),H_ph,H_unc))
-        return H    
-    
-    def doPlot(self):
-        freqs=self.getfreqsGHz()
-        
-        py.figure('H-UNC-Plot')
-        py.plot(freqs,self.getFReal())
-        py.plot(freqs,self.getFImag())
-        py.plot(freqs,self.getFReal()+self.getFRealUnc(),'g--',freqs,self.getFReal()-self.getFRealUnc(),'g--')
-        py.plot(freqs,self.getFImag()+self.getFImagUnc(),'g--',freqs,self.getFImag()-self.getFImagUnc(),'g--')
-        py.xlabel('Frequency in GHz')
-        py.ylabel('Transfer Function')
-        py.legend(('H_real','H_imag'))
-#        
-        py.figure('H-PHASE-Plot')
-        py.plot(freqs,self.getFPh())
-       
-        py.figure('H-ABS-Plot')
-        py.plot(freqs,self.getFAbs())
-        
-    def estimateLDavid(self):
-        #crop frequency axis
-        rdata=self.getcroppedData(self.fdData,200e9,1e12)
-        #calculate phase change
-        p=py.polyfit(rdata[:,0],rdata[:,4],1)        
-        kappa=abs(p[0])
-#        py.figure()
-#        py.plot(rdata[:,0],rdata[:,-1])
-        df=self.getEtalonSpacing()
-        #assume air around
-        n=1.0/(1.00027-kappa*df/py.pi)
-        l=c/2.0*(1.00027/df-kappa/py.pi)
-        return [l,n]
-        
         
 class teralyz():
    # n_0=1.00027#+#0.001j
@@ -222,142 +222,14 @@ class teralyz():
         print("A priori estimated n: " + str(n))
         self.no_echos=self.calculate_no_echos(measurementdata.fdsam._tdData)
         self.outfilename=self.getFilenameSuggestion()
-    
-    def getHFirstPuls(self):
-        origlen=self.H.fdref._tdData.getLength() 
-        refdata=THzTdData(self.H.fdref._tdData.getFirstPuls(10e-12),existing=True)
-        samdata=THzTdData(self.H.fdsam._tdData.getFirstPuls(5e-12),existing=True)
-        refdata.zeroPaddData(origlen-refdata.getLength())
-        samdata.zeroPaddData(origlen-samdata.getLength())
-        
-        firstref=FdData(refdata)
-        firstsam=FdData(samdata)
-        
-        H_firstPuls=HMeas(firstref,firstsam,disableCut=True)
-        
-        return H_firstPuls
  
-    def setOutfilename(self,newname):
-        self.outfilename=newname
- 
-    def H_theory(self,freq,n,l):
-        nc=n[0]-1j*n[1]
-        r_as=(self.n_0-nc)/(self.n_0+nc)
-       
-        FPE=0
-        P=lambda tn: py.exp(-1j*l*freq*2*py.pi*tn/c)
-        for sumk in range(1,self.no_echos):
-            FPE+=((r_as**2)*(P(nc)**2))**sumk
-        
-        H=4*self.n_0*nc/(nc+self.n_0)**2*P((nc-self.n_0))*(1+FPE)
-        
-        return H
-
-    def error_func(self,n,H,l):
-        #we could also introduce constraints on n by artificialy punishing        
-        H_t=self.H_theory(H[0],n,l)
-        return (H_t.real-H[1])**2+(H_t.imag-H[2])**2
-        
     def calculate_no_echos(self,tdsam):
         t_max=tdsam.getTimeWindowLength()
         
         delta=0.5*(t_max*c/self.l_estimated/self.n_estimated)
 
         return int(delta)
-    
-    def nestimatedTD(self,tdsam,tdref):
-        tmaxs=tdsam.getPeakPosition()
-        tmaxr=tdref.getPeakPosition()
-        n=1+c/self.userthickness*abs(tmaxs-tmaxr)
-      
-        return n
-    
-    def findLintelli(self):
-        fmax=self.H.fdref.getmaxfreq()
-        
- #       bnds=(self.thicknessestimate-2*self.thicknessstd,self.thicknessestimate+3*self.thicknessstd)
-#        print(bnds)
-        #overthink once more the cropping length
-        n=self.n_estimated
-        #oscillation period can be calculated from H data!
-        f_span=c/2*1/self.l_estimated*1/n #(this should be the length of the oscillation)
-
-        H_small=self.H.getcroppedData(self.H.fdData,fmax-f_span*1,fmax+f_span*4)
-        py.figure(33)
-        t=minimize(self.errorL,self.userthickness,args=((py.asarray(H_small),)),\
-        method='Nelder-Mead', options={'xtol':1e-6,'disp': False})#, 'disp': False})
-        return t.x[0]
-        
-    def errorL(self,l,H):
-        
-        n_small=[self.calculaten(H,l)]
-        qs=self.QuasiSpace(n_small,H[1,0]-H[0,0],l)
-        
-        tv=self.totalVariation(n_small)
-        py.plot(l,qs[0],'+')
-        py.plot(l,tv[0],'*')        
-        print("Currently evaluating length: "+ str(l[0]*1e6) + " TV Value " + str(tv[0]))
-        return qs[0]
-       
-    def QuasiSpace(self,ns,df,ls):
-        allqs=[]
-        #at the moment, the most easy method(everything else failed...)
-        #get the mean absolute value of the complete spectrum. works best
-        
-
-        for i in range(len(ns)):
-#            xvalues=py.fftfreq(len(ns[i]),df)*c/4
-
-            QSr=py.fft(ns[i].real-py.mean(ns[i].real))
-            QSi=py.fft(ns[i].imag-py.mean(ns[i].real))
-            #naive cut:
-            ix=range(3,int(len(QSr)/2-1))
-        
-            QSr=QSr[ix]
-            QSi=QSi[ix]
-            allqs.append(py.mean(abs(QSr))+py.mean(abs(QSi)))
-        
-        return allqs
-    
-    def totalVariation(self,ns):
-        allvs=[]
-        
-        for i in range(len(ns)):
-            tv1=0            
-            for dm in range(1,len(ns[i])):
-                tv1+=abs(ns[i][dm-1].real-ns[i][dm].real)+\
-                abs(ns[i][dm-1].imag-ns[i][dm].imag)
-            
-            allvs.append(tv1)
-            
-        return allvs
-        
-    def SVMAF(self,freq,n,l):
-       
-        #Apply the SVMAF filter to the material parameters
-        #runningMean=lambda x,N: py.hstack((x[:N-1],py.cvolve(x,py.ones((N,))/N,mode='valid')[(N-1):],x[(-N+1):]))
-        runningMean=lambda x,N: py.hstack((x[:N-1],py.convolve(x,py.ones((N,))/N,mode='same')[N-1:-N+1],x[(-N+1):]))
-       
-        n_smoothed=runningMean(n,3) # no problem in doing real and imaginary part toether
-        H_smoothed=self.H_theory(freq,[n_smoothed.real,n_smoothed.imag],l)
-        
-        H_r=H_smoothed.real
-        H_i=H_smoothed.imag
-        f=1
-        lb_r=self.H.getFReal()-self.H.getFRealUnc()*f
-        lb_i=self.H.getFImag()-self.H.getFImagUnc()*f
-        ub_r=self.H.getFReal()+self.H.getFRealUnc()*f
-        ub_i=self.H.getFImag()+self.H.getFImagUnc()*f
-        
-        #ix=all indices for which after smoothening n H is still inbetwen the bounds        
-        ix=py.all([H_r>=lb_r,H_r<ub_r,H_i>=lb_i,H_i<ub_i],axis=0)
-#        #dont have a goood idea at the moment, so manually:
-        for i in range(len(n_smoothed)):
-            if ix[i]==0:
-                n_smoothed[i]=n[i]
-        print("SVMAF changed the refractive index at " + str(sum(ix)) + " frequencies")
-        return n_smoothed      
-      
+  
     def calculateinits(self,H,l):
         #the frequency axis that will be used for the calculation
         oldfreqaxis=self.H.getfreqs()
@@ -370,19 +242,6 @@ class teralyz():
         alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(newH[:,2]*(n+1)**2/(4*n))
 
         return n,alpha
-    
-    def plotInits(self,H,l,figurenumber=200):
-        inits=self.calculateinits(H,l)
-        py.figure(figurenumber)
-        py.title('Initial Conditions')
-        py.plot(self.H.getfreqsGHz(),inits[0])
-        py.plot(self.H.getfreqsGHz(),-inits[1])
-        py.xlabel('Frequency in GHz')
-        py.ylabel('optical constant value')
-        py.legend(('n_real','n_imag'))
-    
-    def getLengthes(self):
-        return py.linspace(self.thicknessestimate-self.thicknessstd,self.thicknessestimate+self.thicknessstd,self.steps)
    
     def calculaten(self,H,l):
         inits=py.asarray(self.calculateinits(H,l))
@@ -424,6 +283,55 @@ class teralyz():
         self.n=py.column_stack((self.H.getfreqs(),n,n_smoothed))        
         
         return self.n
+  
+    def errorL(self,l,H):
+        
+        n_small=[self.calculaten(H,l)]
+        qs=self.QuasiSpace(n_small,H[1,0]-H[0,0],l)
+        
+        tv=self.totalVariation(n_small)
+        py.plot(l,qs[0],'+')
+        py.plot(l,tv[0],'*')        
+        print("Currently evaluating length: "+ str(l[0]*1e6) + " TV Value " + str(tv[0]))
+        return qs[0]
+    
+    def error_func(self,n,H,l):
+        #we could also introduce constraints on n by artificialy punishing        
+        H_t=self.H_theory(H[0],n,l)
+        return (H_t.real-H[1])**2+(H_t.imag-H[2])**2
+    
+    def findLintelli(self):
+        fmax=self.H.fdref.getmaxfreq()
+        
+ #       bnds=(self.thicknessestimate-2*self.thicknessstd,self.thicknessestimate+3*self.thicknessstd)
+#        print(bnds)
+        #overthink once more the cropping length
+        n=self.n_estimated
+        #oscillation period can be calculated from H data!
+        f_span=c/2*1/self.l_estimated*1/n #(this should be the length of the oscillation)
+
+        H_small=self.H.getcroppedData(self.H.fdData,fmax-f_span*1,fmax+f_span*4)
+        py.figure(33)
+        t=minimize(self.errorL,self.userthickness,args=((py.asarray(H_small),)),\
+        method='Nelder-Mead', options={'xtol':1e-6,'disp': False})#, 'disp': False})
+        return t.x[0]
+
+    def getHFirstPuls(self):
+        origlen=self.H.fdref._tdData.getLength() 
+        refdata=THzTdData(self.H.fdref._tdData.getFirstPuls(10e-12),existing=True)
+        samdata=THzTdData(self.H.fdsam._tdData.getFirstPuls(5e-12),existing=True)
+        refdata.zeroPaddData(origlen-refdata.getLength())
+        samdata.zeroPaddData(origlen-samdata.getLength())
+        
+        firstref=FdData(refdata)
+        firstsam=FdData(samdata)
+        
+        H_firstPuls=HMeas(firstref,firstsam,disableCut=True)
+        
+        return H_firstPuls
+
+    def getLengthes(self):
+        return py.linspace(self.thicknessestimate-self.thicknessstd,self.thicknessestimate+self.thicknessstd,self.steps)
         
     def getFilenameSuggestion(self):
         filenames=self.H.fdsam._tdData.getfilename()
@@ -447,38 +355,27 @@ class teralyz():
             filenames=filenames[0]+'_'+filenames[1]+'_'
         
         return filenames
-        
-        
-    def saveResults(self,filename=None):
-        
-        H_theory=self.H_theory(self.H.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
-        #built the variable that should be saved:        
-        savetofile=py.column_stack((
-        self.H.getfreqs(), #frequencies
-        self.n[:,1].real,-self.n[:,1].imag, #the real and imaginary part of n
-        self.n[:,2].real,-self.n[:,2].imag, #the real and imaginary part of the smoothed n
-        self.H.getFReal(),self.H.getFImag(),#H_measured
-        self.H.getFRealUnc(),self.H.getFImagUnc(),#uncertainties
-        self.H.getFAbs(),self.H.getFPh(),#absH,ph H measured    
-        H_theory.real,H_theory.imag, #theoretic H
-        ))
 
-        headerstr=('freq, ' 
-        'ref_ind_real, ref_ind_imag, '
-        'ref_ind_sreal, ref_ind_simag, '
-        'H_measured_real, H_measured_imag, '
-        'Hunc_real, Hunc_imag, '
-        'abs(H_measured), angle(H_measured), '
-        'H_theory_real, H_theory_imag')
-        if filename==None:
-            fname=self.getFilenameSuggestion()
-        else:
-            fname=filename+"_"
-        fname+='analyzed_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
-        py.savetxt(fname,savetofile,delimiter=',',header=headerstr)
+    def H_theory(self,freq,n,l):
+        nc=n[0]-1j*n[1]
+        r_as=(self.n_0-nc)/(self.n_0+nc)
+       
+        FPE=0
+        P=lambda tn: py.exp(-1j*l*freq*2*py.pi*tn/c)
+        for sumk in range(1,self.no_echos):
+            FPE+=((r_as**2)*(P(nc)**2))**sumk
         
-            
-            
+        H=4*self.n_0*nc/(nc+self.n_0)**2*P((nc-self.n_0))*(1+FPE)
+        
+        return H
+
+    def nestimatedTD(self,tdsam,tdref):
+        tmaxs=tdsam.getPeakPosition()
+        tmaxr=tdref.getPeakPosition()
+        n=1+c/self.userthickness*abs(tmaxs-tmaxr)
+      
+        return n
+
     def plotRefractiveIndex(self,bool_plotsmoothed=1,savefig=0,filename=None):
         if filename==None:
             figname_b=self.getFilenameSuggestion()
@@ -508,7 +405,6 @@ class teralyz():
         if savefig:
             figname=figname_b+'n_imag.png'
             py.savefig(figname,dpi=200)
-
     
     def plotErrorFunction(self,l,freq):
         py.figure()
@@ -525,6 +421,105 @@ class teralyz():
         py.pcolor(N_R,N_I,py.log10(E_fu))
         py.colorbar()
 
+    def plotInits(self,H,l,figurenumber=200):
+        inits=self.calculateinits(H,l)
+        py.figure(figurenumber)
+        py.title('Initial Conditions')
+        py.plot(self.H.getfreqsGHz(),inits[0])
+        py.plot(self.H.getfreqsGHz(),-inits[1])
+        py.xlabel('Frequency in GHz')
+        py.ylabel('optical constant value')
+        py.legend(('n_real','n_imag'))
+    
+    def QuasiSpace(self,ns,df,ls):
+        allqs=[]
+        #at the moment, the most easy method(everything else failed...)
+        #get the mean absolute value of the complete spectrum. works best
+        
+
+        for i in range(len(ns)):
+#            xvalues=py.fftfreq(len(ns[i]),df)*c/4
+
+            QSr=py.fft(ns[i].real-py.mean(ns[i].real))
+            QSi=py.fft(ns[i].imag-py.mean(ns[i].real))
+            #naive cut:
+            ix=range(3,int(len(QSr)/2-1))
+        
+            QSr=QSr[ix]
+            QSi=QSi[ix]
+            allqs.append(py.mean(abs(QSr))+py.mean(abs(QSi)))
+        
+        return allqs
+
+    def saveResults(self,filename=None):
+        
+        H_theory=self.H_theory(self.H.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
+        #built the variable that should be saved:        
+        savetofile=py.column_stack((
+        self.H.getfreqs(), #frequencies
+        self.n[:,1].real,-self.n[:,1].imag, #the real and imaginary part of n
+        self.n[:,2].real,-self.n[:,2].imag, #the real and imaginary part of the smoothed n
+        self.H.getFReal(),self.H.getFImag(),#H_measured
+        self.H.getFRealUnc(),self.H.getFImagUnc(),#uncertainties
+        self.H.getFAbs(),self.H.getFPh(),#absH,ph H measured    
+        H_theory.real,H_theory.imag, #theoretic H
+        ))
+
+        headerstr=('freq, ' 
+        'ref_ind_real, ref_ind_imag, '
+        'ref_ind_sreal, ref_ind_simag, '
+        'H_measured_real, H_measured_imag, '
+        'Hunc_real, Hunc_imag, '
+        'abs(H_measured), angle(H_measured), '
+        'H_theory_real, H_theory_imag')
+        if filename==None:
+            fname=self.getFilenameSuggestion()
+        else:
+            fname=filename+"_"
+        fname+='analyzed_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
+        py.savetxt(fname,savetofile,delimiter=',',header=headerstr)
+
+    def setOutfilename(self,newname):
+        self.outfilename=newname
+
+    def SVMAF(self,freq,n,l):
+       
+        #Apply the SVMAF filter to the material parameters
+        #runningMean=lambda x,N: py.hstack((x[:N-1],py.cvolve(x,py.ones((N,))/N,mode='valid')[(N-1):],x[(-N+1):]))
+        runningMean=lambda x,N: py.hstack((x[:N-1],py.convolve(x,py.ones((N,))/N,mode='same')[N-1:-N+1],x[(-N+1):]))
+       
+        n_smoothed=runningMean(n,3) # no problem in doing real and imaginary part toether
+        H_smoothed=self.H_theory(freq,[n_smoothed.real,n_smoothed.imag],l)
+        
+        H_r=H_smoothed.real
+        H_i=H_smoothed.imag
+        f=1
+        lb_r=self.H.getFReal()-self.H.getFRealUnc()*f
+        lb_i=self.H.getFImag()-self.H.getFImagUnc()*f
+        ub_r=self.H.getFReal()+self.H.getFRealUnc()*f
+        ub_i=self.H.getFImag()+self.H.getFImagUnc()*f
+        
+        #ix=all indices for which after smoothening n H is still inbetwen the bounds        
+        ix=py.all([H_r>=lb_r,H_r<ub_r,H_i>=lb_i,H_i<ub_i],axis=0)
+#        #dont have a goood idea at the moment, so manually:
+        for i in range(len(n_smoothed)):
+            if ix[i]==0:
+                n_smoothed[i]=n[i]
+        print("SVMAF changed the refractive index at " + str(sum(ix)) + " frequencies")
+        return n_smoothed      
+
+    def totalVariation(self,ns):
+        allvs=[]
+        
+        for i in range(len(ns)):
+            tv1=0            
+            for dm in range(1,len(ns[i])):
+                tv1+=abs(ns[i][dm-1].real-ns[i][dm].real)+\
+                abs(ns[i][dm-1].imag-ns[i][dm].imag)
+            
+            allvs.append(tv1)
+            
+        return allvs
 
 def getparams(name):
     #this function should return for several datasets to try the programm the following variables:
