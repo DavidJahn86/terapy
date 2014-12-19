@@ -846,34 +846,3 @@ class FdData():
         bnds=[min(self.getfreqs()),max(self.getfreqs())]
         zpd=self.calculatefdData(self._tdData)
         self.setFDData(self.getcroppedData(zpd,bnds[0],bnds[1]))
-
-if __name__=='__main__':
-    import glob
-    path2='/home/jahndav/Dropbox/THz-Analysis/'    
-#    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
-    samfiles=glob.glob('/home/dave/Dropbox/THz-Analysis/rehi/Sample_?.txt')
-    myTDData=ImportMarburgData(samfiles)
-    myTDData.doPlotWithunc()
-
-#    
-#
-    myFDData=FdData(myTDData)
-#    myFDData.getEtalonSpacing()
-    myFDData.doPlotWithUnc()
-#    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
-#    peaks=myFDData.findAbsorptionLines()
-#    peaksS=myFDData.findAbsorptionPeaks_TESTING()
-#    py.plot(myFDData.getfreqsGHz(),myFDData.fdData[:,2])
-#    py.plot(myFDData.getfreqsGHz()[peaks],myFDData.fdData[peaks,2],'x')
-#    py.plot(myFDData.getfreqsGHz()[peaksS],myFDData.fdData[peaksS,2],'*')
-    
-#    myFDData.setFDData(myFDData.getcroppedData(myFDData.fdData,200e9,2200e9))
-#    etalon=myFDData.getEtalonSpacing()
-#    Ns=int(etalon/myFDData.getfbins())
-#    Ns=py.arange(max(1,Ns-10),Ns+10,1)
-#    hlog=20*py.log10(myFDData.fdData[:,2])
-#    peaks=signal.find_peaks_cwt((hlog**2),Ns)
-#    f=myFDData.getfreqsGHz()
-#        
-#    py.plot(f,hlog)
-#    py.plot(f[peaks],hlog[peaks],'*')
