@@ -7,6 +7,7 @@ import glob
 import Terapy
 import TeraData
 
+#the option parser is initialized
 parser = argparse.ArgumentParser(description='Calculate optical constants from THz-TD Data')
 #Path arguments
 parser.add_argument('--workpath','-w',type=str,default='',help='specify a base folder')
@@ -30,16 +31,17 @@ parser.add_argument('--noSVMAF',default=5,nargs='?',type=int,help='No of SVMAF i
 
 args = parser.parse_args()
 
-starttime=time.time()
-ireffiles=args.ireference
-isamfiles=args.isample
-mode=args.mode
-thickness=args.thickness
-basefolder=args.workpath        
+starttime=time.time()       #save the initial time
+ireffiles=args.ireference   #reference files list
+isamfiles=args.isample      #sample file list
+mode=args.mode              #input file format
+thickness=args.thickness    #thickness im m
+basefolder=args.workpath    #basepath where everything should be done
 
 reffiles=[]
 samfiles=[]
 
+#generate the list of refference and sample files
 for i in range(len(ireffiles)):
     tf=glob.glob(basefolder+ireffiles[i])   
     reffiles+=tf
@@ -48,6 +50,7 @@ for i in range(len(isamfiles)):
     tf=glob.glob(basefolder+isamfiles[i])
     samfiles+=tf
 
+#escape if there was no file found 
 if len(reffiles)==0:
     print "no Reference File specified"
     sys.exit()
@@ -56,6 +59,7 @@ if len(samfiles)==0:
     print "no Sample File specified"
     sys.exit()
         
+#use the appropriate importer
 if mode=='lucastestformat':
     reftd=TeraData.THzTdData(reffiles)
     samtd=TeraData.THzTdData(samfiles)
@@ -68,7 +72,7 @@ if mode=='INRIM':
     reftd=TeraData.ImportInrimData(reffiles)
     samtd=TeraData.ImportInrimData(samfiles)
 
-#windowing of the data?
+#windowing of the data, Standard: yes
 if args.windowing:
     
     reftd.setTDData(reftd.getWindowedData(1e-12))
@@ -78,20 +82,21 @@ if args.windowing:
 ref_fd=TeraData.FdData(reftd)
 sam_fd=TeraData.FdData(samtd)    
 
-#Zero padding of the data?
+#Zero padding of the data, Standard: no
 if args.zeroPadding:
     ref_fd.zeroPadd(5e9)
     sam_fd.zeroPadd(5e9)
 
-#initialize the mdata object (H,and so on)
-
+#calculate the transfer function
 mdata=Terapy.HMeas(ref_fd,sam_fd)
-
+#crop it
 mdata.manipulateFDData(-11e9,[200e9,3.2e12])
-
-myana=Terapy.teralyz(mdata,thickness,20e-6,30)
+#initialize the solver
+myana=Terapy.teralyz(mdata,thickness)
+#do the calculation
 myana.doCalculation(args.calcLength,args.noSVMAF,args.silent)
 
+#do some plots
 if args.outname==None:
     args.outname=myana.getFilenameSuggestion()
 
