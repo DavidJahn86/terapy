@@ -243,21 +243,22 @@ class THzTdData():
         # if even more sophisticated things are needed, just inherit THzTdData class
         #and override the importfile method
         #try to load the file with name fname
-        
+        #it should be possible to write this shorter
         try:
-            #import it right away
-            if params['dec_sep']=='.':
-                
-                data=py.loadtxt(fname,
+            #if no Y_col is specified            
+            if params.has_key('Y_col'):
+                #import it right away
+                if params['dec_sep']=='.':
+                    data=py.loadtxt(fname,
                                 usecols=(params['time_col'],
                                          params['X_col'],
                                          params['Y_col']),
                                 skiprows=params['skiprows'])
                                 
-            elif params['dec_sep']==',':
-                #if the decimal separator is , do a replacement
-                str2float=lambda val: float(val.replace(',','.'))
-                data=py.loadtxt(fname,
+                elif params['dec_sep']==',':
+                    #if the decimal separator is , do a replacement
+                    str2float=lambda val: float(val.replace(',','.'))
+                    data=py.loadtxt(fname,
                                 converters={params['time_col']:str2float,
                                             params['X_col']:str2float,
                                             params['Y_col']:str2float},
@@ -265,6 +266,25 @@ class THzTdData():
                                          params['X_col'],
                                          params['Y_col']),
                                 skiprows=params['skiprows'])                
+            else:
+                #import it right away
+                if params['dec_sep']=='.':
+                    data=py.loadtxt(fname,
+                                usecols=(params['time_col'],
+                                         params['X_col']),
+                                skiprows=params['skiprows'])
+                                
+                elif params['dec_sep']==',':
+                    #if the decimal separator is , do a replacement
+                    str2float=lambda val: float(val.replace(',','.'))
+                    data=py.loadtxt(fname,
+                                converters={params['time_col']:str2float,
+                                            params['X_col']:str2float},
+                                usecols=(params['time_col'],
+                                         params['X_col']),
+                                skiprows=params['skiprows'])
+                dummy_Y=py.zeros((data.shape[0],1))
+                data=py.column_stack((data,dummy_Y))
         except IOError:
             print "File " + fname + " could not be loaded"
             sys.exit()
