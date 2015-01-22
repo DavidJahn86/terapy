@@ -51,6 +51,43 @@ class HMeas(FdData):
         H=py.column_stack((self.fdref.getfreqs(),H.real,H.imag,abs(H),H_ph,H_unc))
         return H    
 
+    def calculateFDunc(self):  
+        #Calculates the uncertainty of the FFT according to:
+        #   - J. M. Fornies-Marquina, J. Letosa, M. Garcia-Garcia, J. M. Artacho, "Error Propagation for the transformation of time domain into frequency domain", IEEE Trans. Magn, Vol. 33, No. 2, March 1997, pp. 1456-1459
+        
+        # Calculate the uncertainty of the real and imaginary part of H
+        #x=[a,b,c,d]
+        dfda=lambda x: x[2]/(x[2]**2+x[3]**2)
+        dfdb=lambda x: x[3]/(x[2]**2+x[3]**2)
+        dfdc=lambda x: (x[0]*x[3]**2-x[0]*x[2]**2-2*x[1]*x[2]*x[3])/(x[2]**2+x[3]**2)**2
+        dfdd=lambda x: (x[1]*x[2]**2-x[1]*x[3]**2-2*x[0]*x[2]*x[3])/(x[2]**2+x[3]**2)**2
+        
+        dgda=lambda x: -x[3]/(x[2]**2+x[3]**2)
+        dgdb=lambda x: x[2]/(x[2]**2+x[3]**2)
+        dgdc=lambda x: -(x[1]*x[2]**2-x[1]*x[3]**2+2*x[0]*x[2]*x[3])/(x[2]**2+x[3]**2)**2
+        dgdd=lambda x: (x[0]*x[3]**2-x[0]*x[2]**2-2*x[1]*x[2]*x[3])/(x[2]**2+x[3]**2)**2
+        
+        ta=self.fdsam.getFReal()
+        tb=self.fdsam.getFImag()
+        tc=self.fdref.getFReal()
+        td=self.fdref.getFImag()
+        
+        H_unc_real2=(self.fdsam.getFRealUnc()*dfda(py.asarray([ta,tb,tc,td])))**2
+        H_unc_real2+=(self.fdsam.getFImagUnc()*dfdb(py.asarray([ta,tb,tc,td])))**2
+        H_unc_real2+=(self.fdref.getFRealUnc()*dfdc(py.asarray([ta,tb,tc,td])))**2
+        H_unc_real2+=(self.fdref.getFImagUnc()*dfdd(py.asarray([ta,tb,tc,td])))**2
+        
+        H_unc_imag2=(self.fdsam.getFRealUnc()*dgda(py.asarray([ta,tb,tc,td])))**2
+        H_unc_imag2+=(self.fdsam.getFImagUnc()*dgdb(py.asarray([ta,tb,tc,td])))**2
+        H_unc_imag2+=(self.fdref.getFRealUnc()*dgdc(py.asarray([ta,tb,tc,td])))**2
+        H_unc_imag2+=(self.fdref.getFImagUnc()*dgdd(py.asarray([ta,tb,tc,td])))**2
+        
+        # Calculate the uncertainty of the modulus and phase of H
+        H_uncabs = py.sqrt((self.fdsam.getFAbsUnc()/self.fdref.getFAbs())**2 + (self.fdsam.getFAbs()*self.fdref.getFAbsUnc())**2/self.fdref.getFAbs()**4)
+        H_uncph = py.sqrt(self.fdsam.getFPhUnc()**2 + self.fdref.getFPhUnc()**2)
+        
+        return py.column_stack((py.sqrt(H_unc_real2),py.sqrt(H_unc_imag2),H_uncabs,H_uncph))
+        
     def calculateSTDunc(self):  
         #this function should give the same result as using uncertainty package with the previously
         #correctly calculated uncertainties of reference and sample measurements
