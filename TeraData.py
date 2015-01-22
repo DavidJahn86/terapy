@@ -503,6 +503,7 @@ class FdData():
     def calculatefdData(self,tdData):
         
         unc=self.calculateSTDunc()
+        #unc=self.calculateFDunc()
         #no need to copy it before (access member variable is ugly but shorter)
 
         #calculate the fft of the X channel
@@ -525,6 +526,34 @@ class FdData():
         unc=intpunc(t[:,0])
         return py.column_stack((t,unc))
 
+    def calculateFDunc(self):
+        #Calculates the uncertainty of the FFT according to:
+        #   - J. M. Fornies-Marquina, J. Letosa, M. Garcia-Garcia, J. M. Artacho, "Error Propagation for the transformation of time domain into frequency domain", IEEE Trans. Magn, Vol. 33, No. 2, March 1997, pp. 1456-1459
+        #return asarray _tdData
+        #Assumes tha the amplitude of each time sample is statistically independent from the amplitude of the other time
+        #samples
+
+        # Calculates uncertainty of the real and imaginary part of the FFT and ther covariance
+        unc_E_real = []
+        unc_E_imag = []
+        cov = []
+        for f in self.getfreqs():
+            unc_E_real.append(py.sum((py.cos(2*py.pi*f*self._tdData.getTimes())*self._tdData.getUncEX())**2))
+            unc_E_imag.append(py.sum((py.sin(2*py.pi*f*self._tdData.getTimes())*self._tdData.getUncEX())**2))
+            cov.append(-0.5*sum(py.sin(4*py.pi*f*self._tdData.getTimes())*self._tdData.getUncEX()**2))
+        
+        unc_E_real = py.sqrt(py.asarray(unc_E_real))
+        unc_E_imag = py.sqrt(py.asarray(unc_E_imag))
+        cov = py.asarray(cov)
+        
+        # Calculates the uncertainty of the modulus and phase of the FFT
+        unc_E_abs = py.sqrt((self.getFReal()**2*unc_E_real**2+self.getFImag()**2*unc_E_imag**2+2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**2)
+        unc_E_ph = py.sqrt((self.getFImag()**2*unc_E_real**2+self.getFReal()**2*unc_E_imag**2-2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**4)
+        
+        t=py.column_stack((self.getfreqs(),unc_E_real,unc_E_imag))
+        t=py.column_stack((t,unc_E_abs,unc_E_ph))
+        return self.getcroppedData(t)  
+        
     def calculateSTDunc(self):
         #this method must be changed!
         #return asarray _tdData
@@ -564,7 +593,7 @@ class FdData():
             repeat_noise_imag=py.std(a.imag,axis=0)
        
         t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real**2),py.sqrt(noise_imag**2+repeat_noise_imag**2)))
-        t=py.column_stack((t,py.sqrt(noise_abs**2+repeat_noise_abs**2),py.sqrt(noise_ph**2+repeat_noise_ph**2)))        
+        t=py.column_stack((t,py.sqrt(noise_abs**2+repeat_noise_abs**2),py.sqrt(noise_ph**2+repeat_noise_ph**2)))    
         return self.getcroppedData(t)    
 
     def doPlot(self):
