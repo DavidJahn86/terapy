@@ -494,16 +494,14 @@ class FdData():
         self._tdData=tdData
         
         #calculate the fft and store it to the fdData array
-        self.setFDData(self.calculatefdData(self._tdData)) 
+        self.fdData=self._calculatefdData(self._tdData) 
+        
         #crop it to user bounds fbnds (min freq, max freq) and maybe also to a 
         #desired frequency step width fbins
         self.resetfdData(fbins,fbnds)
         self.maxDR=max(self.getDR())
 
-    def calculatefdData(self,tdData):
-        
-        unc=self.calculateSTDunc()
-        #unc=self.calculateFDunc()
+    def _calculatefdData(self,tdData):
         #no need to copy it before (access member variable is ugly but shorter)
 
         #calculate the fft of the X channel
@@ -518,7 +516,9 @@ class FdData():
         #set up the fdData array
         t=py.column_stack((dfreq,fd.real,fd.imag,fdabs,fdph))
         
-        #maybe obsolete?
+        #this is so not nice!
+        self.fdData=t
+        unc=self.calculateFDunc()
         t=self.getcroppedData(t,0,unc[-1,0])
         
         #interpolate uncertainty        
@@ -550,51 +550,8 @@ class FdData():
         unc_E_abs = py.sqrt((self.getFReal()**2*unc_E_real**2+self.getFImag()**2*unc_E_imag**2+2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**2)
         unc_E_ph = py.sqrt((self.getFImag()**2*unc_E_real**2+self.getFReal()**2*unc_E_imag**2-2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**4)
         
-        t=py.column_stack((self.getfreqs(),unc_E_real,unc_E_imag))
-        t=py.column_stack((t,unc_E_abs,unc_E_ph))
+        t=py.column_stack((self.getfreqs(),unc_E_real,unc_E_imag,unc_E_abs,unc_E_ph))
         return self.getcroppedData(t)  
-        
-    def calculateSTDunc(self):
-        #this method must be changed!
-        #return asarray _tdData
-        #first calculate white noise contribution
-        #should be independent of underlying data change!
-        precNoise=py.fft(self._tdData.getAllPrecNoise())
-        
-        #make sure, that no interpolated or zero padded data is used for calculating the 
-        #freqeuncy uncertainty, not nice style!
-        commonTdData=self._tdData._bringToCommonTimeAxis(self._tdData._thzdata_raw)
-        dfreq=py.fftfreq(len(commonTdData[0][:,0]),commonTdData[0][5,0]-commonTdData[0][4,0])
-            
-        noise_real=py.std(precNoise.real)*py.ones(commonTdData[0][:,0].shape)
-        noise_imag=py.std(precNoise.imag)*py.ones(commonTdData[0][:,0].shape)
-        noise_abs=py.std(abs(precNoise))*py.ones(commonTdData[0][:,0].shape)
-        noise_ph=py.std(py.angle(precNoise))*py.ones(commonTdData[0][:,0].shape)
-        
-        
-        #second calculate variation between measurements
-        if self._tdData.numberOfDataSets<=1:
-            repeat_noise_imag=0
-            repeat_noise_real=0
-            repeat_noise_abs=0
-            repeat_noise_ph=0
-            
-        else:
-            a=py.fft(commonTdData[:,:,1],axis=1)
-            b=abs(a)
-            c=[]
-            for i in range(self._tdData.numberOfDataSets):
-                c.append(self.removePhaseOffset(dfreq,py.unwrap(py.angle(a[i,:]))))
-            c=py.asarray(c)
-            
-            repeat_noise_abs=py.std(b,axis=0)
-            repeat_noise_ph=py.std(c,axis=0)
-            repeat_noise_real=py.std(a.real,axis=0)
-            repeat_noise_imag=py.std(a.imag,axis=0)
-       
-        t=py.column_stack((dfreq,py.sqrt(noise_real**2+repeat_noise_real**2),py.sqrt(noise_imag**2+repeat_noise_imag**2)))
-        t=py.column_stack((t,py.sqrt(noise_abs**2+repeat_noise_abs**2),py.sqrt(noise_ph**2+repeat_noise_ph**2)))    
-        return self.getcroppedData(t)    
 
     def doPlot(self):
         #plot the absolute and phase of the fdData array
@@ -870,7 +827,7 @@ class FdData():
         minf_old=min(self.getfreqs())
         maxf_old=max(self.getfreqs())
         self._tdData=tdData        
-        self.setFDData(self.calculatefdData(self._tdData))
+        self.setFDData(self._calculatefdData(self._tdData))
         
         self.resetfdData(fbins_old,[minf_old,maxf_old])
 
@@ -893,5 +850,5 @@ class FdData():
         self._tdData.zeroPaddData(nozeros)
         #leave the old bnds in place
         bnds=[min(self.getfreqs()),max(self.getfreqs())]
-        zpd=self.calculatefdData(self._tdData)
+        zpd=self._calculatefdData(self._tdData)
         self.setFDData(self.getcroppedData(zpd,bnds[0],bnds[1]))
