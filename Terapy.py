@@ -44,7 +44,7 @@ class HMeas(FdData):
         
         #calculate the uncertainty of H_real and H_imag
         H_unc=self.calculateSTDunc()
-        #H_unc=self.calculateFDunc()
+
         #phase
         H_ph=self.fdref.getFPh()-self.fdsam.getFPh()
         #H itself
