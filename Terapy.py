@@ -275,15 +275,57 @@ class teralyz():
 
         #crop the time domain data to the first pulse and apply than the calculation
         n=self.n_0.real-newH[:,3]/(2*py.pi*oldfreqaxis*l)*c
-        alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(newH[:,2]*(n+1)**2/(4*n))
+        alpha=-c/(2*py.pi*oldfreqaxis*l)*py.log(newH[:,2]*(n+self.n_0.real)**2/(4*n*self.n_0.real))
 
         return n,alpha
+        
+    def calculateinitsunc(self,H,l,sigma_L = 5e-6,sigma_Theta = 2,n_exact = 1,filename=None):
+        # Calculates the uncertianty on n and k according to:
+        # W. Withayachumnankul, B. M. Fisher, H. Lin, D. Abbott, "Uncertainty in terahertz time-domain spectroscopy measurement", J. Opt. Soc. Am. B., Vol. 25, No. 6, June 2008, pp. 1059-1072
+        #
+        # sigma_L = standard uncertainty on sample thickness in meter
+        # sigma_Theta = interval of sample misallignment in degree
+        # n_exact = exact value of the refractive index of air during the measurements
+        
+        n, k = self.calculateinits(H,l)
+        n = py.asarray(n)
+        k = py.asarray(k)        
+        
+        # Uncertainty on n
+        sn_l_2 = (c*self.H.getFPh()/(2*py.pi*self.H.getfreqs()*l*l))**2 * sigma_L**2
+        sn_H_2 = (c/(2*py.pi*self.H.getfreqs()*l))**2 * self.H.getFPhUnc()**2
+        fn_Theta = (n-self.n_0.real)*(1/py.cos(sigma_Theta*py.pi/180)-1)
+        fn_H = (c/(2*py.pi*self.H.getfreqs()*l))*py.absolute(-py.angle(4*(n-1j*k)*self.n_0/(n-1j*k+self.n_0)**2))
+        fn_FP = (c/(2*py.pi*self.H.getfreqs()*l))*py.absolute(-py.angle(1/(1-((n-1j*k-self.n_0)/(n-1j*k+self.n_0))**2*py.exp(-2*1j*(n-1j*k)*2*py.pi*self.H.getfreqs()*l/c))))
+        fn_n0 = abs(self.n_0.real - n_exact)*py.ones(len(self.H.getFPh()))
+        u_n = py.sqrt(sn_l_2+sn_H_2)+fn_Theta+fn_H+fn_FP+fn_n0
+
+        # Uncertianty on k
+        sk_l_2 = ((c/(2*py.pi*self.H.getfreqs()*l*l))*py.log(self.H.getFAbs()*(n+self.n_0.real)**2/(4*n*self.n_0.real)))**2 * sigma_L**2
+        sk_H_2 = (-c/(2*py.pi*self.H.getfreqs()*l*self.H.getFAbs()))**2 * self.H.getFAbsUnc()**2
+        fk_Theta = k*(1/py.cos(sigma_Theta*py.pi/180)-1)+c*(n-self.n_0.real)*fn_Theta/(n*2*py.pi*self.H.getfreqs()*l*(n+self.n_0.real))
+        fk_H = (c/(2*py.pi*self.H.getfreqs()*l))*(py.log(py.absolute(n/(n-1j*k)*((n-1j*k+self.n_0.real)/(n+self.n_0.real))**2))+py.absolute(fn_H)*(n-self.n_0.real)/(n*(n+self.n_0.real)))
+        fk_FP = (c/(2*py.pi*self.H.getfreqs()*l))*(py.absolute(-py.log(py.absolute(1/(1-((n-1j*k-self.n_0)/(n-1j*k+self.n_0))**2*py.exp(-2*1j*(n-1j*k)*2*py.pi*self.H.getfreqs()*l/c)))))+py.absolute(fn_FP)*(n-self.n_0.real)/(n*(n+self.n_0.real)))
+        fk_n0 = (c/(2*py.pi*self.H.getfreqs()*l))*(n-self.n_0.real)*(self.n_0.real - n_exact)/(n*self.n_0.real)
+        u_k = py.sqrt(sk_l_2+sk_H_2)+fk_Theta+fk_H+fk_FP+fk_n0
+        
+        # Save results into a table accessible from outside
+        self.n_with_unc=py.column_stack((
+        self.H.getfreqs(),                            # frequencies
+        n, k,                                         # real and imaginary part of n
+        u_n, u_k,                                     # k=1 combined uncertainty on n and k
+        sn_l_2, sn_H_2, fn_Theta, fn_H, fn_FP, fn_n0, # Uncertainty components of n due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
+        sk_l_2, sk_H_2, fk_Theta, fk_H, fk_FP, fk_n0  # Uncertainty components of k due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
+        ))
+        
+        return
    
     def calculaten(self,H,l):
         #this calculates n for a given transferfunction H and a given thickness l
     
         #calculate the initial values
         inits=py.asarray(self.calculateinits(H,l))
+        
         res=[] #the array of refractive index
         vals=[] # the array of error function values
         bnds=((1,None),(0,None)) #not used at the moment, with SLSQP bnds can be introduced
@@ -315,7 +357,7 @@ class teralyz():
         print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(self.l_opt*1e6) + ' micro m ' + '\033[0m')
 
         #calculate n for the given l_opt
-        n=self.calculaten(self.H.fdData,self.l_opt)
+        n=self.calculaten(self.H.fdData,545e-6)#self.l_opt)
         n_smoothed=n
         i=0
         
@@ -324,7 +366,10 @@ class teralyz():
             n_smoothed=self.SVMAF(self.H.getfreqs(),n_smoothed,self.l_opt)
             i+=1
 
-        self.n=py.column_stack((self.H.getfreqs(),n,n_smoothed))        
+        self.n=py.column_stack((self.H.getfreqs(),n,n_smoothed))   
+        
+        # Messo per prova
+        self.calculateinitsunc(self.H.fdData,self.l_opt)
         
         return self.n
   
@@ -457,6 +502,78 @@ class teralyz():
         if savefig:
             figname=figname_b+'n_imag.png'
             py.savefig(figname,dpi=200)
+            
+        py.figure('Refractive_Simplified_Real_Plot')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,1], color='red')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,1]-self.n_with_unc[:,3],self.n_with_unc[:,1]+self.n_with_unc[:,3], alpha=0.5, label='k = 1', facecolor='blue')
+        py.xlabel('Frequency in GHz')
+        py.ylabel('n Real')
+        if savefig:
+            figname=figname_b+'n_simplified_real.png'
+            py.savefig(figname,dpi=200)
+            
+        py.figure('Refractive_Simplified_Imag_Plot')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,2], color='red')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,2]-self.n_with_unc[:,4],self.n_with_unc[:,2]+self.n_with_unc[:,4], alpha=0.5, label='k = 1', facecolor='blue')
+        py.xlabel('Frequency in GHz')
+        py.ylabel('n Imag')
+        if savefig:
+            figname=figname_b+'n_simplified_imag.png'
+            py.savefig(figname,dpi=200)
+        
+        py.figure('Comparison_Real_Plot')
+        if bool_plotsmoothed==1:
+            py.plot(self.n[:,0].real/1e9,self.n[:,2].real, color='green', label='full eq')
+        else:
+            py.plot(self.n[:,0].real/1e9,self.n[:,1].real, color='green', label='full eq')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,1], color='red', label='simplified eq')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,1]-self.n_with_unc[:,3],self.n_with_unc[:,1]+self.n_with_unc[:,3], alpha=0.5, facecolor='blue')
+        py.legend(loc='upper left')        
+        py.xlabel('Frequency in GHz')
+        py.ylabel('n Real')
+        
+        py.figure('Eqs_Comparison_Imag_Plot')
+        if bool_plotsmoothed==1:
+            py.plot(self.n[:,0].real/1e9,-self.n[:,2].imag, color='green', label='full eq')
+        else:
+            py.plot(self.n[:,0].real/1e9,-self.n[:,1].imag, color='green', label='full eq')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,2], color='red', label='simplified eq')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,2]-self.n_with_unc[:,4],self.n_with_unc[:,2]+self.n_with_unc[:,4], alpha=0.5, facecolor='blue')
+        py.legend(loc='upper left')        
+        py.xlabel('Frequency in GHz')
+        py.ylabel('n Imag')
+        
+        # Plot uncertainty components of n
+        py.figure('Refractive_Simplified_Real_Unc_Components_Plot')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,3], 'r', label='combined unc')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,5], 'g', label='s(l)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,6], 'b', label='s(H)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,7], 'y', label='f($\Theta$)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,8], '--r', label='f(k<<<)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,9], '--g', label='f(FP)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,10], '--b', label='f(n_0)')
+        py.legend(loc='upper left')
+        py.xlabel('Frequency in GHz')
+        py.ylabel('Uncertainty components')
+        if savefig:
+            figname=figname_b+'n_simplified_real_unc_components.png'
+            py.savefig(figname,dpi=200)
+        
+        # Plot uncertianty components of k
+        py.figure('Refractive_Simplified_Imag_Unc_Components_Plot')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,4], 'r', label='combined unc')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,11], 'g', label='s(l)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,12], 'b', label='s(H)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,13], 'y', label='f($\Theta$)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,14], '--r', label='f(k<<<)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,15], '--g', label='f(FP)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,16], '--b', label='f(n_0)')
+        py.legend(loc='upper left')
+        py.xlabel('Frequency in GHz')
+        py.ylabel('Uncertainty components')
+        if savefig:
+            figname=figname_b+'n_simplified_imag_unc_components.png'
+            py.savefig(figname,dpi=200)
     
     def plotErrorFunction(self,l,freq):
         #plots the error function
@@ -531,6 +648,20 @@ class teralyz():
             fname=filename+"_"
         fname+='analyzed_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
         py.savetxt(fname,savetofile,delimiter=',',header=headerstr)
+        
+        headerstr=('freq, ' 
+        'ref_ind_real, ref_ind_imag, '
+        'u(ref_ind_real), u(ref_ind_imag), '
+        'var(l)_n, var(H)_n, f(Theta)_n, f(k<<<)_n, f(FP)_n, f(n0)_n, '
+        'var(l)_k, var(H)_k, f(Theta)_k, f(k<<<)_k, f(FP)_k, f(n0)_k, ')
+        
+        if filename==None:
+            fname=self.getFilenameSuggestion()
+        else:
+            fname=filename+"_"
+            
+        fname+='SimplifiedAnalysis_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
+        py.savetxt(fname,self.n_with_unc,delimiter=',',header=headerstr)
 
     def setOutfilename(self,newname):
         #outfilename
