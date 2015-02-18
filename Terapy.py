@@ -357,7 +357,7 @@ class teralyz():
         print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(self.l_opt*1e6) + ' micro m ' + '\033[0m')
 
         #calculate n for the given l_opt
-        n=self.calculaten(self.H.fdData,545e-6)#self.l_opt)
+        n=self.calculaten(self.H.fdData,self.l_opt)
         n_smoothed=n
         i=0
         
@@ -368,7 +368,6 @@ class teralyz():
 
         self.n=py.column_stack((self.H.getfreqs(),n,n_smoothed))   
         
-        # Messo per prova
         self.calculateinitsunc(self.H.fdData,self.l_opt)
         
         return self.n
