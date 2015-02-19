@@ -279,7 +279,7 @@ class teralyz():
 
         return n,alpha
         
-    def calculateinitsunc(self,H,l,sigma_L = 5e-6,sigma_Theta = 2,n_exact = 1,filename=None):
+    def calculateinitsunc(self,H,l,sigma_L = 5e-6,sigma_Theta = 1,n_exact = 1,filename=None):
         # Calculates the uncertianty on n and k according to:
         # W. Withayachumnankul, B. M. Fisher, H. Lin, D. Abbott, "Uncertainty in terahertz time-domain spectroscopy measurement", J. Opt. Soc. Am. B., Vol. 25, No. 6, June 2008, pp. 1059-1072
         #
@@ -289,7 +289,7 @@ class teralyz():
         
         n, k = self.calculateinits(H,l)
         n = py.asarray(n)
-        k = py.asarray(k)        
+        k = py.asarray(k)      
         
         # Uncertainty on n
         sn_l_2 = (c*self.H.getFPh()/(2*py.pi*self.H.getfreqs()*l*l))**2 * sigma_L**2
@@ -309,13 +309,29 @@ class teralyz():
         fk_n0 = (c/(2*py.pi*self.H.getfreqs()*l))*(n-self.n_0.real)*(self.n_0.real - n_exact)/(n*self.n_0.real)
         u_k = py.sqrt(sk_l_2+sk_H_2)+fk_Theta+fk_H+fk_FP+fk_n0
         
+        # Convert n in epsilon Epsilon = Epsilon_1 + j Epsilon_2 = (n+jk)**2
+        # Epsilon_1 = n**2 - k**2
+        # Epsilon_2 = -2nk
+        Epsilon_1 = n**2 - k **2
+        Epsilon_2 = -2 * n * k
+        u_Epsilon_1 = py.sqrt((2*n*u_n)**2 + (-2*k*u_k)**2)
+        u_Epsilon_2 = py.sqrt((-2*k*u_n)**2 + (-2*n*u_k)**2)
+        
+        # Calculate absorption coefficient
+        # alpha = 4 * pi * k * f / c
+        alpha = 4 * py.pi * k * self.H.getfreqs() / c
+        u_alpha = 4 * py.pi * u_k * self.H.getfreqs() / c
+        
         # Save results into a table accessible from outside
         self.n_with_unc=py.column_stack((
         self.H.getfreqs(),                            # frequencies
         n, k,                                         # real and imaginary part of n
         u_n, u_k,                                     # k=1 combined uncertainty on n and k
         sn_l_2, sn_H_2, fn_Theta, fn_H, fn_FP, fn_n0, # Uncertainty components of n due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
-        sk_l_2, sk_H_2, fk_Theta, fk_H, fk_FP, fk_n0  # Uncertainty components of k due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
+        sk_l_2, sk_H_2, fk_Theta, fk_H, fk_FP, fk_n0, # Uncertainty components of k due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
+        Epsilon_1, Epsilon_2,                         # Real and imaginary part of Epsilon
+        u_Epsilon_1, u_Epsilon_2,                     # k = 1 uncertainty on the real and imaginary part of Epsilon
+        alpha, u_alpha                                # Absorption coefficient and its k = 1 uncertainty
         ))
         
         return
@@ -357,7 +373,7 @@ class teralyz():
         print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(self.l_opt*1e6) + ' micro m ' + '\033[0m')
 
         #calculate n for the given l_opt
-        n=self.calculaten(self.H.fdData,545e-6)#self.l_opt)
+        n=self.calculaten(self.H.fdData,self.l_opt)
         n_smoothed=n
         i=0
         
@@ -368,7 +384,6 @@ class teralyz():
 
         self.n=py.column_stack((self.H.getfreqs(),n,n_smoothed))   
         
-        # Messo per prova
         self.calculateinitsunc(self.H.fdData,self.l_opt)
         
         return self.n
@@ -521,7 +536,7 @@ class teralyz():
             figname=figname_b+'n_simplified_imag.png'
             py.savefig(figname,dpi=200)
         
-        py.figure('Comparison_Real_Plot')
+        py.figure('Eqs_Comparison_Real_Plot')
         if bool_plotsmoothed==1:
             py.plot(self.n[:,0].real/1e9,self.n[:,2].real, color='green', label='full eq')
         else:
@@ -574,6 +589,37 @@ class teralyz():
         if savefig:
             figname=figname_b+'n_simplified_imag_unc_components.png'
             py.savefig(figname,dpi=200)
+            
+        #py.figure('Comparison_with_NPL_Real_Plot')
+        #if bool_plotsmoothed==1:
+        #    py.plot(self.n[:,0].real/1e9,self.n[:,2].real, color='green', label='full eq')
+        #else:
+        #    py.plot(self.n[:,0].real/1e9,self.n[:,1].real, color='green', label='full eq')
+        #py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,1], color='red', label='simplified eq')
+        #py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,1]-self.n_with_unc[:,3],self.n_with_unc[:,1]+self.n_with_unc[:,3], alpha=0.5, facecolor='blue')
+        #py.plot(self.n_with_unc[:,0]/1e9,[1.95]*len(self.n_with_unc[:,0]), color='black', label='NPL')
+        #py.fill_between(self.n_with_unc[:,0]/1e9,py.asarray([1.95]*len(self.n_with_unc[:,0]))-0.05,py.asarray([1.95]*len(self.n_with_unc[:,0]))+0.05, alpha=0.5, facecolor='yellow')
+        #py.legend(loc='upper left')        
+        #py.xlabel('Frequency in GHz')
+        #py.ylabel('n Real')
+        
+        py.figure('Epsilon_Real_Plot')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,17], color='red')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,17]-self.n_with_unc[:,19],self.n_with_unc[:,17]+self.n_with_unc[:,19], alpha=0.5, facecolor='blue')        
+        py.xlabel('Frequency in GHz')
+        py.ylabel('Epsilon Real')
+        
+        py.figure('Epsilon_Imag_Plot')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,18], color='red')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,18]-self.n_with_unc[:,20],self.n_with_unc[:,18]+self.n_with_unc[:,20], alpha=0.5, facecolor='blue')        
+        py.xlabel('Frequency in GHz')
+        py.ylabel('Epsilon Imag')
+        
+        py.figure('Alpha_Plot')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,21], color='red')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,21]-self.n_with_unc[:,22],self.n_with_unc[:,21]+self.n_with_unc[:,22], alpha=0.5, facecolor='blue')        
+        py.xlabel('Frequency in GHz')
+        py.ylabel('Alpha')
     
     def plotErrorFunction(self,l,freq):
         #plots the error function
@@ -649,11 +695,15 @@ class teralyz():
         fname+='analyzed_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
         py.savetxt(fname,savetofile,delimiter=',',header=headerstr)
         
+        # Save in a separate file the results of the simplified calculation of n, k, alpha end epsilon along with their unc
         headerstr=('freq, ' 
         'ref_ind_real, ref_ind_imag, '
         'u(ref_ind_real), u(ref_ind_imag), '
         'var(l)_n, var(H)_n, f(Theta)_n, f(k<<<)_n, f(FP)_n, f(n0)_n, '
-        'var(l)_k, var(H)_k, f(Theta)_k, f(k<<<)_k, f(FP)_k, f(n0)_k, ')
+        'var(l)_k, var(H)_k, f(Theta)_k, f(k<<<)_k, f(FP)_k, f(n0)_k, '
+        'Epsilon_1, Epsilon_2, '
+        'u(Epsilon_1), u(Epsilon_2), '
+        'alpha, u(alpha), ')
         
         if filename==None:
             fname=self.getFilenameSuggestion()
