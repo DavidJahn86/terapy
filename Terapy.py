@@ -279,7 +279,7 @@ class teralyz():
 
         return n,alpha
         
-    def calculateinitsunc(self,H,l,sigma_L = 5e-6,sigma_Theta = 1,n_exact = 1,filename=None):
+    def calculateinitsunc(self,H,l,sigma_L = 1e-6,sigma_Theta = 1,n_exact = 1,filename=None):
         # Calculates the uncertianty on n and k according to:
         # W. Withayachumnankul, B. M. Fisher, H. Lin, D. Abbott, "Uncertainty in terahertz time-domain spectroscopy measurement", J. Opt. Soc. Am. B., Vol. 25, No. 6, June 2008, pp. 1059-1072
         #
@@ -291,23 +291,39 @@ class teralyz():
         n = py.asarray(n)
         k = py.asarray(k)      
         
+        Asam = []
+        Aref = []
+        Bsam = []
+        Bref = []
+        for i in range(len(self.H.getfreqs())):
+            Asam.append((py.sum(py.imag(self.H.fdsam.getFAbs().tolist()[i]*py.exp(1j*2*py.pi*self.H.getfreqs().tolist()[i]*self.H.fdsam._tdData.getTimes()))*self.H.fdsam._tdData.getUncEX())**2))
+            Aref.append((py.sum(py.imag(self.H.fdref.getFAbs().tolist()[i]*py.exp(1j*2*py.pi*self.H.getfreqs().tolist()[i]*self.H.fdref._tdData.getTimes()))*self.H.fdref._tdData.getUncEX())**2))
+            Bsam.append((py.sum(py.real(self.H.fdsam.getFAbs().tolist()[i]*py.exp(1j*2*py.pi*self.H.getfreqs().tolist()[i]*self.H.fdsam._tdData.getTimes()))*self.H.fdsam._tdData.getUncEX())**2))
+            Bref.append((py.sum(py.real(self.H.fdref.getFAbs().tolist()[i]*py.exp(1j*2*py.pi*self.H.getfreqs().tolist()[i]*self.H.fdref._tdData.getTimes()))*self.H.fdref._tdData.getUncEX())**2))
+        
         # Uncertainty on n
-        sn_l_2 = (c*self.H.getFPh()/(2*py.pi*self.H.getfreqs()*l*l))**2 * sigma_L**2
-        sn_H_2 = (c/(2*py.pi*self.H.getfreqs()*l))**2 * self.H.getFPhUnc()**2
+        sn_Esam_2 = ((c/(2*py.pi*self.H.getfreqs()*l))**2 * py.asarray(Asam)/self.H.fdsam.getFAbs()**4)/self.H.fdsam._tdData.numberOfDataSets
+        sn_Eref_2 = ((c/(2*py.pi*self.H.getfreqs()*l))**2 * py.asarray(Aref)/self.H.fdref.getFAbs()**4)/self.H.fdref._tdData.numberOfDataSets
+        sn_l_2 = ((n-self.n_0)*sigma_L/l)**2
+        #sn_l_2_1 = (c*self.H.getFPh()/(2*py.pi*self.H.getfreqs()*l*l))**2 * sigma_L**2
+        #sn_H_2 = (c/(2*py.pi*self.H.getfreqs()*l))**2 * self.H.getFPhUnc()**2
         fn_Theta = (n-self.n_0.real)*(1/py.cos(sigma_Theta*py.pi/180)-1)
         fn_H = (c/(2*py.pi*self.H.getfreqs()*l))*py.absolute(-py.angle(4*(n-1j*k)*self.n_0/(n-1j*k+self.n_0)**2))
         fn_FP = (c/(2*py.pi*self.H.getfreqs()*l))*py.absolute(-py.angle(1/(1-((n-1j*k-self.n_0)/(n-1j*k+self.n_0))**2*py.exp(-2*1j*(n-1j*k)*2*py.pi*self.H.getfreqs()*l/c))))
         fn_n0 = abs(self.n_0.real - n_exact)*py.ones(len(self.H.getFPh()))
-        u_n = py.sqrt(sn_l_2+sn_H_2)+fn_Theta+fn_H+fn_FP+fn_n0
+        u_n = py.sqrt(sn_l_2+sn_Esam_2+sn_Eref_2)+fn_Theta+fn_H+fn_FP+fn_n0
 
         # Uncertianty on k
-        sk_l_2 = ((c/(2*py.pi*self.H.getfreqs()*l*l))*py.log(self.H.getFAbs()*(n+self.n_0.real)**2/(4*n*self.n_0.real)))**2 * sigma_L**2
-        sk_H_2 = (-c/(2*py.pi*self.H.getfreqs()*l*self.H.getFAbs()))**2 * self.H.getFAbsUnc()**2
+        sk_Esam_2 = ((c/(2*py.pi*self.H.getfreqs()*l))**2 *(Bsam/self.H.fdsam.getFAbs()**4 + ((n-self.n_0)/(n+self.n_0))**2 * sn_Esam_2/n**2))/self.H.fdsam._tdData.numberOfDataSets
+        sk_Eref_2 = ((c/(2*py.pi*self.H.getfreqs()*l))**2 *(Bref/self.H.fdref.getFAbs()**4 + ((n-self.n_0)/(n+self.n_0))**2 * sn_Eref_2/n**2))/self.H.fdref._tdData.numberOfDataSets
+        sk_l_2 = (k*sigma_L/l)**2 + (c*(n-self.n_0)/((n+self.n_0)*n*2*py.pi*self.H.getfreqs()*l))**2*sn_l_2
+        #sk_l_2_1 = ((c/(2*py.pi*self.H.getfreqs()*l*l))*py.log(self.H.getFAbs()*(n+self.n_0.real)**2/(4*n*self.n_0.real)))**2 * sigma_L**2
+        #sk_H_2 = (-c/(2*py.pi*self.H.getfreqs()*l*self.H.getFAbs()))**2 * self.H.getFAbsUnc()**2
         fk_Theta = k*(1/py.cos(sigma_Theta*py.pi/180)-1)+c*(n-self.n_0.real)*fn_Theta/(n*2*py.pi*self.H.getfreqs()*l*(n+self.n_0.real))
         fk_H = (c/(2*py.pi*self.H.getfreqs()*l))*(py.log(py.absolute(n/(n-1j*k)*((n-1j*k+self.n_0.real)/(n+self.n_0.real))**2))+py.absolute(fn_H)*(n-self.n_0.real)/(n*(n+self.n_0.real)))
         fk_FP = (c/(2*py.pi*self.H.getfreqs()*l))*(py.absolute(-py.log(py.absolute(1/(1-((n-1j*k-self.n_0)/(n-1j*k+self.n_0))**2*py.exp(-2*1j*(n-1j*k)*2*py.pi*self.H.getfreqs()*l/c)))))+py.absolute(fn_FP)*(n-self.n_0.real)/(n*(n+self.n_0.real)))
         fk_n0 = (c/(2*py.pi*self.H.getfreqs()*l))*(n-self.n_0.real)*(self.n_0.real - n_exact)/(n*self.n_0.real)
-        u_k = py.sqrt(sk_l_2+sk_H_2)+fk_Theta+fk_H+fk_FP+fk_n0
+        u_k = py.sqrt(sk_l_2+sk_Esam_2+sk_Eref_2)+fk_Theta+fk_H+fk_FP+fk_n0
         
         # Convert n in epsilon Epsilon = Epsilon_1 + j Epsilon_2 = (n+jk)**2
         # Epsilon_1 = n**2 - k**2
@@ -318,22 +334,27 @@ class teralyz():
         u_Epsilon_2 = py.sqrt((-2*k*u_n)**2 + (-2*n*u_k)**2)
         
         # Calculate absorption coefficient
-        # alpha = 4 * pi * k * f / c
-        alpha = 4 * py.pi * k * self.H.getfreqs() / c
-        u_alpha = 4 * py.pi * u_k * self.H.getfreqs() / c
+        # alpha = 4 * pi * k * f / c1
+        alpha = 4 * py.pi * k * self.H.getfreqs() / (100 * c)      # in cm^-1
+        u_alpha = 4 * py.pi * u_k * self.H.getfreqs() / (100 * c)  # in cm^-1
+        
+        # Calculate maximum measurable absorption coefficient according to
+        # P. U. Jepsen and B. M. Fisher: "Dynamic Range in terahertz time-domain transmission and reflection spectroscopy", Optics Letters, Vol. 30, n. 1, pp. 29-31, Jan 2005
+        
+        alpha_max = 2 * py.log((self.H.fdsam.getDR() * 4 * n)/(n + 1)**2) / (100 * l) # in cm^-1
         
         # Save results into a table accessible from outside
         self.n_with_unc=py.column_stack((
         self.H.getfreqs(),                            # frequencies
         n, k,                                         # real and imaginary part of n
         u_n, u_k,                                     # k=1 combined uncertainty on n and k
-        sn_l_2, sn_H_2, fn_Theta, fn_H, fn_FP, fn_n0, # Uncertainty components of n due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
-        sk_l_2, sk_H_2, fk_Theta, fk_H, fk_FP, fk_n0, # Uncertainty components of k due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
+        py.sqrt(sn_l_2), py.sqrt(sn_Esam_2), py.sqrt(sn_Eref_2), fn_Theta, fn_H, fn_FP, fn_n0, # Uncertainty components of n due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
+        py.sqrt(sk_l_2), py.sqrt(sk_Esam_2), py.sqrt(sk_Eref_2), fk_Theta, fk_H, fk_FP, fk_n0, # Uncertainty components of k due to thickness, H, sample misallignment, k<<<, Neglect FP, ref ind of air
         Epsilon_1, Epsilon_2,                         # Real and imaginary part of Epsilon
         u_Epsilon_1, u_Epsilon_2,                     # k = 1 uncertainty on the real and imaginary part of Epsilon
-        alpha, u_alpha                                # Absorption coefficient and its k = 1 uncertainty
+        alpha, u_alpha,                               # Absorption coefficient and its k = 1 uncertainty
+        alpha_max,                                     # Maximum measurable absorption coefficient
         ))
-        
         return
    
     def calculaten(self,H,l):
@@ -562,11 +583,12 @@ class teralyz():
         py.figure('Refractive_Simplified_Real_Unc_Components_Plot')
         py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,3], 'r', label='combined unc')
         py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,5], 'g', label='s(l)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,6], 'b', label='s(H)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,7], 'y', label='f($\Theta$)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,8], '--r', label='f(k<<<)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,9], '--g', label='f(FP)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,10], '--b', label='f(n_0)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,6], 'b', label='s(Esam)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,7], 'y', label='s(Eref)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,8], '--r', label='f($\Theta$)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,9], '--g', label='f(k<<<)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,10], '--b', label='f(FP)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,11], '--y', label='f(n_0)')
         py.legend(loc='upper left')
         py.xlabel('Frequency in GHz')
         py.ylabel('Uncertainty components')
@@ -577,12 +599,13 @@ class teralyz():
         # Plot uncertianty components of k
         py.figure('Refractive_Simplified_Imag_Unc_Components_Plot')
         py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,4], 'r', label='combined unc')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,11], 'g', label='s(l)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,12], 'b', label='s(H)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,13], 'y', label='f($\Theta$)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,14], '--r', label='f(k<<<)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,15], '--g', label='f(FP)')
-        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,16], '--b', label='f(n_0)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,12], 'g', label='s(l)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,13], 'b', label='s(Esam)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,14], 'y', label='s(Eref)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,15], '--r', label='f($\Theta$)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,16], '--g', label='f(k<<<)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,17], '--b', label='f(FP)')
+        py.semilogy(self.n_with_unc[:,0]/1e9, self.n_with_unc[:,18], '--y', label='f(n_0)')
         py.legend(loc='upper left')
         py.xlabel('Frequency in GHz')
         py.ylabel('Uncertainty components')
@@ -604,22 +627,32 @@ class teralyz():
         #py.ylabel('n Real')
         
         py.figure('Epsilon_Real_Plot')
-        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,17], color='red')
-        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,17]-self.n_with_unc[:,19],self.n_with_unc[:,17]+self.n_with_unc[:,19], alpha=0.5, facecolor='blue')        
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,19], color='red')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,19]-self.n_with_unc[:,21],self.n_with_unc[:,19]+self.n_with_unc[:,21], alpha=0.5, facecolor='blue')        
         py.xlabel('Frequency in GHz')
         py.ylabel('Epsilon Real')
+        if savefig:
+            figname=figname_b+'Epsilon_real.png'
+            py.savefig(figname,dpi=200)
         
         py.figure('Epsilon_Imag_Plot')
-        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,18], color='red')
-        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,18]-self.n_with_unc[:,20],self.n_with_unc[:,18]+self.n_with_unc[:,20], alpha=0.5, facecolor='blue')        
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,20], color='red')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,20]-self.n_with_unc[:,22],self.n_with_unc[:,20]+self.n_with_unc[:,22], alpha=0.5, facecolor='blue')        
         py.xlabel('Frequency in GHz')
         py.ylabel('Epsilon Imag')
+        if savefig:
+            figname=figname_b+'Epsilon_imag.png'
+            py.savefig(figname,dpi=200)
         
         py.figure('Alpha_Plot')
-        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,21], color='red')
-        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,21]-self.n_with_unc[:,22],self.n_with_unc[:,21]+self.n_with_unc[:,22], alpha=0.5, facecolor='blue')        
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,23], color='red', label='alpha / cm^-1')
+        py.fill_between(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,23]-self.n_with_unc[:,24],self.n_with_unc[:,23]+self.n_with_unc[:,24], alpha=0.5, facecolor='blue')
+        py.plot(self.n_with_unc[:,0]/1e9,self.n_with_unc[:,25], '--r', label='alpha max / cm^-1')
         py.xlabel('Frequency in GHz')
         py.ylabel('Alpha')
+        if savefig:
+            figname=figname_b+'Alpha.png'
+            py.savefig(figname,dpi=200)
     
     def plotErrorFunction(self,l,freq):
         #plots the error function
@@ -699,11 +732,11 @@ class teralyz():
         headerstr=('freq, ' 
         'ref_ind_real, ref_ind_imag, '
         'u(ref_ind_real), u(ref_ind_imag), '
-        'var(l)_n, var(H)_n, f(Theta)_n, f(k<<<)_n, f(FP)_n, f(n0)_n, '
-        'var(l)_k, var(H)_k, f(Theta)_k, f(k<<<)_k, f(FP)_k, f(n0)_k, '
+        'std(l)_n, std(Esam)_n, std(Eref)_n, f(Theta)_n, f(k<<<)_n, f(FP)_n, f(n0)_n, '
+        'std(l)_k, std(Esam)_k, std(Eref)_k, f(Theta)_k, f(k<<<)_k, f(FP)_k, f(n0)_k, '
         'Epsilon_1, Epsilon_2, '
         'u(Epsilon_1), u(Epsilon_2), '
-        'alpha, u(alpha), ')
+        'alpha, u(alpha), alpha_max, ')
         
         if filename==None:
             fname=self.getFilenameSuggestion()

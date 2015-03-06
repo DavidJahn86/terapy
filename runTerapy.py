@@ -25,9 +25,10 @@ parser.add_argument('--thickness','-t',type=float,help='sample thickness')
 parser.add_argument('--windowing',action='store_false',help='switch Data Windowing Off')
 parser.add_argument('--zeroPadding',action='store_true',help='Switch Zero Padding on')
 parser.add_argument('--calcLength',action='store_false',help='switch length calculation off')
-parser.add_argument('--savePlots','-s',action='store_false',help='turn off saving TD and FD plots')
+parser.add_argument('--NoSavePlots','-s',action='store_true',help='turn off saving plots')
 parser.add_argument('--silent',action='store_true',help='switch save results off')
 parser.add_argument('--noSVMAF',default=5,nargs='?',type=int,help='No of SVMAF iterations')
+parser.add_argument('--showPlots',action='store_true',help='Show plots')
 
 args = parser.parse_args()
 
@@ -102,7 +103,7 @@ if args.outname==None:
 
 args.outname+='_'
 
-if args.savePlots:
+if args.NoSavePlots == False:
     pylab.ioff()
     reftd.doPlotWithunc()
     samtd.doPlotWithunc()
@@ -114,7 +115,7 @@ if args.savePlots:
     sam_fd.doPlot()
     pylab.figure('FD-ABS-Plot')
     pylab.legend(('Reference','Sample'))
-    pylab.savefig(args.outname + 'ABS-Frequency-Domain.png')
+    pylab.savefig(args.workpath+args.outname + 'ABS-Frequency-Domain.png')
     pylab.close()
     pylab.figure('FD-PHASE-Plot')
     pylab.legend(('Reference','Sample'))
@@ -125,9 +126,17 @@ if args.savePlots:
     pylab.savefig(args.workpath+args.outname + 'TransferFunction.png')
     pylab.close()
 
-myana.plotRefractiveIndex(1,1,args.workpath+args.outname)
+if args.NoSavePlots == False:
+    savefig = 1
+else:
+    savefig = 0
+
+myana.plotRefractiveIndex(1,savefig,args.workpath+args.outname)
+    
 myana.saveResults(args.workpath+args.outname)
 
 endtime=time.time()
 print "Consumed Time: " + str(endtime-starttime)
-pylab.show()
+
+if args.showPlots:
+    pylab.show()

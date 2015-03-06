@@ -63,9 +63,13 @@ class THzTdData():
     def calcTDData(self,tdDatas):
         #tdDatas is a a 3d array of measurements, along with their uncertainties
         #meantdData is the weighted sum of the different measurements
-        meantdData,sumofweights=py.average(tdDatas[:,:,1:3],axis=0,weights=1.0/tdDatas[:,:,3:]**2,returned=True)
+        #meantdData,sumofweights=py.average(tdDatas[:,:,1:3],axis=0,weights=1.0/tdDatas[:,:,3:]**2,returned=True)
+        meantdData=py.average(tdDatas[:,:,1:3],axis=0)
         #use error propagation formula
-        unc=py.sqrt(1.0/sumofweights)
+        noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
+        rep = py.std(tdDatas[:,:,1:3],axis=0, ddof=1)/py.sqrt(self.numberOfDataSets)
+        unc = py.sqrt(rep**2+noise**2)
+        #unc=py.sqrt(1.0/sumofweights)
         #time axis are all equal
         return py.column_stack((tdDatas[0][:,0],meantdData,unc))       
     
