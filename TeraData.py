@@ -67,7 +67,10 @@ class THzTdData():
         meantdData=py.average(tdDatas[:,:,1:3],axis=0)
         #use error propagation formula
         noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
-        rep = py.std(tdDatas[:,:,1:3],axis=0, ddof=1)/py.sqrt(self.numberOfDataSets)
+        if tdDatas.shape[0]==1:
+            rep = py.zeros((len(tdDatas[0,:,0]),2))
+        else:
+            rep = py.std(tdDatas[:,:,1:3],axis=0, ddof=1)/py.sqrt(self.numberOfDataSets)
         unc = py.sqrt(rep**2+noise**2)
         #unc=py.sqrt(1.0/sumofweights)
         #time axis are all equal
