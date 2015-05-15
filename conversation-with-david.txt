@@ -1,0 +1,430 @@
+Wednesday, February 11, 2015
+[10:42:39 PM] Marco Bisi: WOW! Skype on android!
+ Thursday, February 12, 2015
+[8:15:56 AM] David Jahn: hi
+[8:16:32 AM] David Jahn: let me know, when you are there, so that we can fix the problem together... is the data in the dropbox, so that i can try to find the problem here?
+[9:39:14 AM] David Jahn: hi marco
+[9:39:18 AM] David Jahn: Good morning
+[9:39:26 AM] David Jahn: i would like to help you with the software
+[9:39:30 AM] David Jahn: now, if possible
+[9:39:31 AM] Marco Bisi: hi David
+[9:39:43 AM] Marco Bisi: ok. The data are in the dropbox
+[9:40:02 AM] Marco Bisi: laboratory/delay/line/2015 something PTB samples
+[9:40:24 AM] Marco Bisi: /home/marco/Dropbox/laboratory/delay-line/2015-02-10_PTB-samples/2015-02-10_quartz/
+[9:41:30 AM] David Jahn: you've added a header ?
+[9:42:01 AM] Marco Bisi: no, as far as I remember it was always there. Shouldn't it?
+[9:42:22 AM] David Jahn: shouldnt be the problem
+[9:44:47 AM] Marco Bisi: removed the headers, same error
+[9:44:58 AM] David Jahn: yep shouldnt be the problem
+[9:47:35 AM] Marco Bisi: are we working on the master or on the devel branch?
+[9:47:43 AM] David Jahn: i tried on master
+[9:47:57 AM] David Jahn: will try to find the problem now
+[9:52:09 AM] David Jahn: strange
+[9:53:03 AM] David Jahn: even though they are completey same length and time axis after constructing fdData array the ref files miss one entry
+[9:53:06 AM] David Jahn: let me check
+[10:26:24 AM] David Jahn: sorry stupid photoshooting
+[10:27:33 AM] Marco Bisi: I found that:
+[10:28:38 AM] Marco Bisi: when I run runTerapy, after line 91 I have in Terapy.py after line 73 len(ta, tb, td, tc) = 166, 166, 166, 166
+[10:29:02 AM] Marco Bisi: then after line 93 in runTerapy len(ta, tb, td, tc) = 100, 100, 100, 100
+[10:29:36 AM] Marco Bisi: and finally, just before the errorr, after line 95  len(ta, tb, td, tc) = 165, 165, 166, 166
+[10:29:39 AM] Marco Bisi: ?
+[10:29:41 AM] David Jahn: 166 is cutted from 0 to 5 thz
+[10:30:25 AM] Marco Bisi: line 91:mdata=Terapy.HMeas(ref_fd,sam_fd)
+[10:30:39 AM] Marco Bisi: line 93: mdata.manipulateFDData(-11e9,[200e9,3.2e12])
+[10:30:58 AM] Marco Bisi: line 95: myana=Terapy.teralyz(mdata,thickness)
+[10:31:26 AM] Marco Bisi: isn't the error related to the different length of the t's?
+[10:32:15 AM] David Jahn: yes it is
+[10:32:38 AM] Marco Bisi: so, it's the the tarlyz class?
+[10:32:51 AM] Marco Bisi: sorry, TERALYZ
+[10:32:53 AM] David Jahn: hm
+[10:32:56 AM] David Jahn: maybe
+[10:33:09 AM] David Jahn: already in teradata there is something strange
+[10:33:55 AM] Marco Bisi: give me an hint, I'm not able to explore variables
+[10:34:08 AM] David Jahn: why not?
+[10:34:50 AM] Marco Bisi: well, it's not clear to me how to access e.g. TeraData.FdData
+[10:35:11 AM] Marco Bisi: it is an object, don't understand its properties
+[10:35:15 AM] David Jahn: if __name__=='__main__':
+    import glob
+    #path2='/home/jahndav/Dropbox/THz-Analysis/'    
+#    samfiles=glob.glob(path2+'MarburgData/*_Lact1*')
+    samfiles=glob.glob('*sam*.dat')
+    reffiles=glob.glob('*ref*.dat')
+    
+    sam=ImportInrimData(samfiles)
+    ref=ImportInrimData(reffiles)
+    
+    sam_f=FdData(sam)
+    ref_f=FdData(ref)
+[10:35:56 AM] Marco Bisi: can we hold for two minutes, please?
+[10:36:06 AM] David Jahn: i find the bug
+[10:36:11 AM] David Jahn: some min
+[10:39:42 AM] Marco Bisi: I'm back
+[10:40:29 AM] David Jahn: or you just use the demoandtest.py
+[10:41:28 AM] David Jahn: teradat
+[10:41:36 AM] David Jahn: teradata seems to work fine
+[10:54:33 AM] David Jahn: always distracted.... sorry
+[10:54:40 AM] David Jahn: again in front of the pc
+[11:10:20 AM] David Jahn: seems to happen in calculate first pulse
+[11:10:34 AM] David Jahn: strange
+[11:11:58 AM] David Jahn: so it is in the end the same but that produces the wrong lengthes in teradata
+[11:12:01 AM] David Jahn: class
+[11:12:51 AM] David Jahn: even though it shouldnt even be a problem
+[11:12:58 AM] Marco Bisi: has it to do with interpolation or similar things? I'm not an expert in your code...
+[11:13:47 AM] David Jahn: i think it happens in the calculation of fdData at the moment
+[11:13:50 AM] David Jahn: let me check
+[11:14:04 AM] David Jahn: 1) i will try to find the problem in teradata
+[11:14:20 AM] David Jahn: 2) i will try to find why Hmeas is not capable to solve the issue
+[11:14:31 AM] Marco Bisi: can I help?
+[11:14:44 AM] David Jahn: if you want
+[11:15:09 AM] David Jahn: the problem is that even though the time axis are equal the program delivers different frequency axis for both reference and sample files
+[11:16:59 AM] Marco Bisi: you mean: for every sample the axis is different from that of the references?
+[11:17:02 AM] David Jahn: your time axis for reference and sample measurements is not equal?
+[11:17:29 AM] Marco Bisi: it should be...with the uncertainty of one step, perhaps. I'll check
+[11:17:55 AM] David Jahn: >>> sam_td.tdData[0,0]-ref_td.tdData[0,0]
+1.5611318868542419e-15
+[11:18:19 AM] David Jahn: strange!
+[11:18:33 AM] David Jahn: if i divide this number by your dt it is 0.18
+[11:19:02 AM] David Jahn: same for the end
+[11:19:04 AM] David Jahn: hm
+[11:19:13 AM] Marco Bisi: it can't be. First point is always at zero delay!
+[11:20:29 AM] Marco Bisi: and last point, 3999 steps away, is always 3.33170602978e-11 ps
+[11:20:35 AM] David Jahn: hm"
+[11:20:36 AM] David Jahn: !!!!
+[11:20:42 AM] Marco Bisi: sorry, second not picoseconds
+[11:23:49 AM] David Jahn: this looks good
+[11:23:50 AM] David Jahn: >>> for tdData in ref_td._thzdata_raw:
+...     print tdData.shape
+... 
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+>>> for tdData in sam_td._thzdata_raw:
+...     print tdData.shape
+... 
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+(3999, 3)
+[11:24:22 AM] David Jahn: >>> for tdData in sam_td._thzdata_raw:
+...     print tdData[0,0]
+... 
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+>>> for tdData in sam_td._thzdata_raw:
+...     print tdData[0,0]
+... 
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+[11:24:27 AM] Marco Bisi: so, time domain data are good
+[11:24:33 AM] David Jahn: yeo
+[11:27:17 AM] Marco Bisi: >>> for tdData in samtd._thzdata_raw:
+...     print tdData[-1,0]
+... 
+3.33170602978e-11
+>>> for tdData in reftd._thzdata_raw:
+...     print tdData[-1,0]
+... 
+3.33170602978e-11
+>>>
+[11:27:27 AM] David Jahn: yes
+[11:27:28 AM] Marco Bisi: I only have one sam and one ref
+[11:27:40 AM] David Jahn: did you import all?
+[11:27:55 AM] Marco Bisi: but for me is samtd, not sam_td. Why?
+[11:28:04 AM] Marco Bisi: I'll do it right now
+[11:30:40 AM] Marco Bisi: >>> for tdData in reftd._thzdata_raw:
+...     print tdData[0,0]
+... 
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+>>> for tdData in samtd._thzdata_raw:
+...     print tdData[0,0]
+... 
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+[11:30:45 AM] David Jahn: i do :
+[11:30:45 AM] David Jahn: import Terapy
+import TeraData
+import glob
+import pylab as py
+
+
+#provide a path to the reference and sample files
+#a list of strings or a glob expression can be used
+samfiles=glob.glob('*sam*.dat')
+reffiles=glob.glob('*ref*.dat')
+
+#use the appropriate importer for the Data,
+#initialize the TimeDomain Data Object with a list of filenames
+#sam_td=TeraData.ImportMarburgData(samfiles)
+#ref_td=TeraData.ImportMarburgData(reffiles)
+sam_td=TeraData.ImportInrimData(samfiles)
+ref_td=TeraData.ImportInrimData(reffiles)
+
+#the Frequency domain data is calculated by passing a TimeDomain data object to the FdData class
+sam_fd=TeraData.FdData(sam_td)
+ref_fd=TeraData.FdData(ref_td)
+
+#the Transferfunction is a object of type HMeas, which is nothing than a special frequency domain 
+#data type, such that HMeas inherits from FdData
+H=Terapy.HMeas(ref_fd,sam_fd)
+
+##################################################################################################
+# until here was a demonstration how the objects can be initialized
+##################################################################################################
+
+#the time domain data can be manipulatd through the member functions of THzTdData, so for instance
+#windowing:
+sam_td.setTDData(sam_td.getWindowedData(1e-12))
+ref_td.setTDData(ref_td.getWindowedData(1e-12))
+[11:30:51 AM] Marco Bisi: >>> for tdData in reftd._thzdata_raw:
+...     print tdData[-1,0]
+... 
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+[11:30:58 AM] Marco Bisi: >>> for tdData in samtd._thzdata_raw:
+...     print tdData[-1,0]
+... 
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+3.33170602978e-11
+[11:31:10 AM] David Jahn: yep
+[11:31:25 AM] David Jahn: so why is samtd.tdData[0,0] not zero?!
+[11:31:55 AM] Marco Bisi: IT IS zero
+[11:32:44 AM] Marco Bisi: you mean: on your side?
+[11:33:08 AM] David Jahn: is it zero?
+[11:33:52 AM] Marco Bisi: samtd.tdData[0,0]-reftd.tdData[0,0]
+1.5903228348090882e-15
+[11:33:58 AM] Marco Bisi: no:(
+[11:34:40 AM] David Jahn: is samtd.tdData[0,0]
+[11:35:05 AM] David Jahn: =0
+[11:35:09 AM] Marco Bisi: >>> samtd.tdData[0,0]
+6.2606621953459012e-15
+[11:35:20 AM] David Jahn: yep
+[11:35:32 AM] David Jahn: this strange weighted mean seems to be the problem
+[11:35:35 AM] David Jahn: °°"
+[11:35:49 AM] Marco Bisi: the difference between two steps:
+8.333431799998354e-15
+[11:35:59 AM] Marco Bisi: almost the same...
+[11:36:25 AM] David Jahn: yes
+[11:36:33 AM] David Jahn: hm unfortunately we have lunch now
+[11:37:06 AM] Marco Bisi: OK. I'll be back at 14:30 (after swimming pool and lunch). Is it ok for you?
+[11:37:12 AM] David Jahn: yes
+[11:37:16 AM] David Jahn: we will solve the problem
+[11:37:24 AM] David Jahn: think it comes from the introduction of the weighted mean
+[11:38:00 AM] Marco Bisi: In the meantime, I'll try to understand better the code. Enjoy your meal
+[12:11:52 PM] Marco Bisi: if I run the program with one sample and one ref, samtd.tdData[0,0]-reftd.tdData[0,0] = 0, but the error persists.
+[12:12:32 PM] Marco Bisi: It can be the weighted mean; there is something else
+[12:24:36 PM] David Jahn: ah
+[12:24:46 PM] David Jahn: i now where the time offset comes from!
+[12:25:37 PM] David Jahn: The time offset comes from the time shift of the data, such that all pulse maxima are at the same time position!
+[12:34:22 PM] David Jahn: ok this is all correct
+[12:34:40 PM] David Jahn: maybe i just add lucas contribution to development and it will work
+[12:38:06 PM] David Jahn: yes working
+[12:38:20 PM] David Jahn: so i will merge to development and implement the latest changes
+[12:53:36 PM] David Jahn: try the development version, it should work
+[2:50:17 PM] Marco Bisi: I imagined that the time offset was because of time shifting nedeed for alignment of the different sam and ref series
+[2:52:05 PM] Marco Bisi: this raises a metrological problem: after having aligned the ref's and the sam's separately, which is the relationship between aligned ref time origin and aligned sam one?
+[2:53:41 PM] Marco Bisi: I guess that the a priori knowledge of the thickness is mandatory in order to get meaningful results, otherwise you have to put in the fit the delay as a parameter to be estimated, which should be consistent with the estimated thickness
+[2:53:59 PM] Marco Bisi: but probably you are already doing this:)
+[3:00:35 PM] David Jahn: i would like to remove the time shifiting volunatringly because in my eyes it is not good to do it
+[3:02:24 PM] Marco Bisi: but, because of the drifts, isn't it needed?
+[3:02:36 PM] David Jahn: your concern about time axis relation: if we assume that reference and sample pulses only jitter around the "correct" time axis everything is fine
+[3:03:27 PM] Marco Bisi: hey hey, we are talking of something which must be stable well below 2.5 um (one step)
+[3:03:40 PM] Marco Bisi: I suspect that it is not possible
+[3:04:08 PM] David Jahn: ok than we shouldnt shift the time axis
+[3:04:21 PM] Marco Bisi: why not?
+[3:04:48 PM] Marco Bisi: the time shift is a consequence of the change in the length of the two arms of the experiment
+[3:05:00 PM] Marco Bisi: we don't have a mean to verify this
+[3:05:13 PM] Marco Bisi: I mean: verify the change
+[3:05:28 PM] Marco Bisi: so what is the sense of averaging?
+[3:05:37 PM] Marco Bisi: if we don't shift?
+[3:06:02 PM] David Jahn: it will generate worse results
+[3:06:11 PM] David Jahn: but we are sure about what we are doing
+[3:06:17 PM] Marco Bisi: agree
+[3:06:39 PM] David Jahn: the shifts that we are applying now are below one step
+[3:06:40 PM] Marco Bisi: one solution, to overcome the problem, is to measure as fast as possible
+[3:06:53 PM] Marco Bisi: one ref + sam
+[3:06:57 PM] Marco Bisi: then calculate H
+[3:07:06 PM] Marco Bisi: and then average the Hs
+[3:07:16 PM] David Jahn: yes
+[3:07:25 PM] Marco Bisi: in this way, we don't care about the time shifts
+[3:07:29 PM] David Jahn: not compliant with your GUM
+[3:07:45 PM] Marco Bisi: :O
+[3:08:02 PM] David Jahn: or at least we would need to change a lot
+[3:08:04 PM] Marco Bisi: tell the GUM to provide me a veeeery stable environment
+[3:08:52 PM] Marco Bisi: Can we try WITHOUT time shifting, and the compare the results?
+[3:09:17 PM] Marco Bisi: I thought that Luca implemented the uncertainty calculation, but I don't see the figures...
+[3:09:29 PM] David Jahn: uncertainty on n ?
+[3:09:45 PM] Marco Bisi: on something, I don't know what
+[3:09:55 PM] David Jahn: uncertainty on H is finished
+[3:10:05 PM] David Jahn: (and on E(omega) and E( t))
+[3:10:50 PM] Marco Bisi: In conclusion, we still don't know if the time shifting is harmful or benefical. I'll ask Luca
+[3:11:28 PM] Marco Bisi: if he can speed up things and provide the function
+[3:11:35 PM] Marco Bisi: agree?
+[3:11:40 PM] David Jahn: semi
+[3:11:44 PM] David Jahn: he is doing it now
+[3:12:09 PM] David Jahn: he also wants me to do MC simulations ... but i'm really not so much interested in the moment
+[3:12:14 PM] David Jahn: i can help you with the code
+[3:12:25 PM] Marco Bisi: ok
+[3:12:42 PM] Marco Bisi: let me understand how to avoid the time shift
+[3:13:00 PM] Marco Bisi: and tell me if the average of the Hs
+[3:13:15 PM] Marco Bisi: (don't care about the GUM at present)
+[3:13:24 PM] Marco Bisi: is something that we can try
+[3:14:20 PM] David Jahn: yes but i think you shouldnt bother
+[3:14:35 PM] David Jahn: the applied shift is one quarter step
+[3:14:57 PM] David Jahn: the results and uncertainties and everything will be very very very similar for both methods with and without shift
+[3:15:13 PM] Marco Bisi: I trust you
+[3:15:16 PM] David Jahn: yes
+[3:15:27 PM] Marco Bisi: so, let's try to remove the shift?
+[3:16:06 PM] David Jahn: if you measure H several times (i.e. ref, sam, ref, sam, ref, sam) the time shift will be neglectible (between ref and sam)
+[3:16:22 PM] Marco Bisi: that is what I meant
+[3:16:47 PM] Marco Bisi: and when transformed in the Fourier space: bye bye shift!
+[3:18:29 PM] Marco Bisi: I have one question: the scripts tells me
+[3:18:35 PM] Marco Bisi: 234.608333333 GHz estimated etalon frequency
+A priori estimated Width: 377.496521299
+[3:18:55 PM] Marco Bisi: I guess it comes from the time shift bewteen sam and ref
+[3:19:19 PM] Marco Bisi: but the measured thickness is much more, how does this come?
+[3:22:51 PM] Marco Bisi: in calcTDData you average the measurements, righ?
+[3:23:00 PM] David Jahn: yes
+[3:23:11 PM] Marco Bisi: I haven't found the shift yet
+[3:23:20 PM] David Jahn: its in data processing
+[3:23:24 PM] David Jahn: or something like that
+[3:23:28 PM] Marco Bisi: so in terapy
+[3:23:31 PM] David Jahn: no
+[3:23:54 PM] Marco Bisi: def _removeTimeShift(self,tdDatas): ?
+[3:24:10 PM] David Jahn: sounds correct
+[3:24:16 PM] Marco Bisi: mmm
+[3:24:31 PM] Marco Bisi: looking where the function is called
+[3:24:45 PM] David Jahn: you can outcomment line 405
+[3:24:53 PM] Marco Bisi: def _processRawData(self,tdDatas):
+[3:25:22 PM] Marco Bisi: oh shit! I'm looking in the master version!
+[3:25:32 PM] David Jahn: :-) no problem
+[3:26:19 PM] Marco Bisi: found
+[3:26:33 PM] Marco Bisi: shall we implement an option for argparse?
+[3:27:07 PM] David Jahn: as you want
+[3:27:17 PM] David Jahn: it is easier to just outcomment the line
+[3:27:39 PM] Marco Bisi: I will never, never recall what I did
+[3:27:46 PM] David Jahn: you than can also outcomment 407 can you?
+[3:27:58 PM] David Jahn: if 405 is removed
+[3:27:59 PM] Marco Bisi: please, don't forget that I'm a veeery old man
+[3:28:06 PM] Marco Bisi: my brain is almost gone
+[3:28:07 PM] David Jahn: document it in git
+[3:28:11 PM] David Jahn: :-) its not!
+[3:28:17 PM] Marco Bisi: if I have it as an option, I know that it is there
+[3:28:50 PM] Marco Bisi: line 407: I saw it
+[3:29:09 PM] Marco Bisi: regarding git:
+[3:29:21 PM] Marco Bisi: I don't have pulled yet
+[3:29:32 PM] Marco Bisi: I simply downloaded the zips
+[3:29:41 PM] Marco Bisi: I'll be ready tomorrow for that
+[3:29:55 PM] Marco Bisi: so, for the moment, I will work on my local copy only
+[3:30:15 PM] Marco Bisi: but I want to ask Luca how far we are from the uncertainty
+[3:30:24 PM] David Jahn: you can also ask me
+[3:30:24 PM] Marco Bisi: otherwise Alireza will kill me
+[3:30:31 PM] David Jahn: who is that?
+[3:30:51 PM] Marco Bisi: the person who sent me the samples
+[3:30:52 PM] David Jahn: uncertainty for E(t) and E(omega) and H(omega) is fine
+[3:31:03 PM] Marco Bisi: the one who is waiting for the results
+[3:31:28 PM] Marco Bisi: I must suspend the conversation for a while
+[3:38:50 PM] Marco Bisi: it will be probably be a long stop
+[3:38:53 PM] Marco Bisi: sorry
+[4:20:11 PM] Marco Bisi: I'm back, are you still there?
+[4:53:24 PM] Marco Bisi: David?
+[4:53:38 PM] Marco Bisi: Am I authorized to create an issue for myself?
+[5:01:18 PM] Marco Bisi: Sorry David, I created the issue and closed it immediately
+[5:02:44 PM] Marco Bisi: I'm really dull
+[5:19:02 PM] David Jahn: are you authorized for github, i have to check
+[5:19:34 PM] Marco Bisi: Yes I am, and also authorized to re-open an erroneously closed issue
+[5:19:43 PM] Marco Bisi: just did it;)
+[5:20:54 PM] Marco Bisi: I'm setting up the my local github
+[5:22:07 PM] David Jahn: what is your github user name?
+[5:22:17 PM] Marco Bisi: MarcoBisi0
+[5:22:32 PM] Marco Bisi: if I want to create a branch for issue #3,
+[5:22:37 PM] Marco Bisi: I must do
+[5:22:59 PM] Marco Bisi: git branch iss3
+[5:23:03 PM] David Jahn: yes
+[5:23:04 PM] Marco Bisi: isn't it?
+[5:23:12 PM] David Jahn: i added you also now to github collaborators
+[5:23:15 PM] David Jahn: forgot it earlier
+[5:23:23 PM] David Jahn: now you should be able to push code
+[5:23:29 PM] Marco Bisi: wow! collaborator! sounds cool
+[5:23:35 PM] David Jahn: :-=
+[5:23:38 PM] David Jahn: have to go now!
+[5:23:52 PM] Marco Bisi: ciao, and say hallo to Regine
+[5:23:54 PM] David Jahn: cofee with regine and later something related to birth preparation or so
+[5:23:56 PM] David Jahn: :-(
+[5:24:11 PM] David Jahn: (despite perfect weather and conditions she forst me to attend this course this week)
+[5:25:08 PM] Marco Bisi: come on, you both have to be prepared
+[5:25:09 PM] David Jahn: http://www.bergfex.at/hintertux/webcams/c74/
+[5:25:31 PM] David Jahn: phil was sag that i dont come with him to the alps
