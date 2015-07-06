@@ -344,7 +344,7 @@ class teralyz():
         alpha_max = 2 * py.log((self.H.fdsam.getDR() * 4 * n)/(n + 1)**2) / (100 * l) # in cm^-1
         
         # Save results into a table accessible from outside
-        self.n_with_unc=py.column_stack((
+        self.n_with_unc=py.real(py.column_stack((
         self.H.getfreqs(),                            # frequencies
         n, k,                                         # real and imaginary part of n
         u_n, u_k,                                     # k=1 combined uncertainty on n and k
@@ -354,7 +354,7 @@ class teralyz():
         u_Epsilon_1, u_Epsilon_2,                     # k = 1 uncertainty on the real and imaginary part of Epsilon
         alpha, u_alpha,                               # Absorption coefficient and its k = 1 uncertainty
         alpha_max,                                     # Maximum measurable absorption coefficient
-        ))
+        )))
         return
    
     def calculaten(self,H,l):
