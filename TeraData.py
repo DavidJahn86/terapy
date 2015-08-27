@@ -171,6 +171,19 @@ class THzTdData():
         #gives the time, at which the signal is maximal
         return self.tdData[py.argmax(self.getEX()),0]
     
+    def getPeakWidth(self):
+        #use as definition: 10 % over and under maxima around peak position
+        position=self.getPeakPosition()
+        E=self.getEX()
+        Ebigger=abs(E)>0.1*abs(py.amax(E))
+        times=self.tdData[Ebigger,0]
+        times=times[times>position-3e-12]
+        times=times[times<position+3e-12]        
+        #make maximal pulse width smaller than 10 ps
+        
+        return py.amax(times)-py.amin(times)
+       
+       
     def getPreceedingNoise(self,tdData,timePreceedingSignal=-1):
         #retruns the preceeding noise in X and Y channel of tdData
         #it uses timePreceedingSignal to evaluate the noise, if not given,
@@ -245,15 +258,18 @@ class THzTdData():
         windowedData[:,4]*=w
         return windowedData
     
+    def getPulseWidth(self):
+        pass    
 
     def importfile(self,fname,params):
         # if even more sophisticated things are needed, just inherit THzTdData class
         #and override the importfile method
         #try to load the file with name fname
         #it should be possible to write this shorter
+        print(fname)
         try:
             #if no Y_col is specified            
-            if params.has_key('Y_col'):
+            if 'Y_col' in params:
                 #import it right away
                 if params['dec_sep']=='.':
                     data=py.loadtxt(fname,
@@ -293,7 +309,7 @@ class THzTdData():
                 dummy_Y=py.zeros((data.shape[0],1))
                 data=py.column_stack((data,dummy_Y))
         except IOError:
-            print "File " + fname + " could not be loaded"
+            print("File " + fname + " could not be loaded")
             sys.exit()
 
         #scale the timaaxis
@@ -491,7 +507,7 @@ class FdData():
     '''
     #Class variables, that restrict the accesible frequency data from 0 to 5 THz
     FMIN=0
-    FMAX=5e12    
+    FMAX=10e12    
     
     def __init__(self,tdData,fbins=-1,fbnds=[FMIN,FMAX]):
         #FdData is always attached to a TdData Object
@@ -525,7 +541,10 @@ class FdData():
         
         #this is so not nice!
         self.fdData=t
+      
+        #this seems to take very long! so maybe we skip it, until needed!
         unc=self.calculateFDunc()
+        
         t=self.getcroppedData(t,0,unc[-1,0])
         
         #interpolate uncertainty        
@@ -533,7 +552,7 @@ class FdData():
         unc=intpunc(t[:,0])
         return py.column_stack((t,unc))
 
-    def calculateFDunc(self):
+    def calculateFDunc_old(self):
         #Calculates the uncertainty of the FFT according to:
         #   - J. M. Fornies-Marquina, J. Letosa, M. Garcia-Garcia, J. M. Artacho, "Error Propagation for the transformation of time domain into frequency domain", IEEE Trans. Magn, Vol. 33, No. 2, March 1997, pp. 1456-1459
         #return asarray _tdData
@@ -544,21 +563,44 @@ class FdData():
         unc_E_real = []
         unc_E_imag = []
         cov = []
+        
+       
         for f in self.getfreqs():
             unc_E_real.append(py.sum((py.cos(2*py.pi*f*self._tdData.getTimes())*self._tdData.getUncEX())**2))
             unc_E_imag.append(py.sum((py.sin(2*py.pi*f*self._tdData.getTimes())*self._tdData.getUncEX())**2))
             cov.append(-0.5*sum(py.sin(4*py.pi*f*self._tdData.getTimes())*self._tdData.getUncEX()**2))
-        
+      
         unc_E_real = py.sqrt(py.asarray(unc_E_real))
         unc_E_imag = py.sqrt(py.asarray(unc_E_imag))
         cov = py.asarray(cov)
-        
         # Calculates the uncertainty of the modulus and phase of the FFT
         unc_E_abs = py.sqrt((self.getFReal()**2*unc_E_real**2+self.getFImag()**2*unc_E_imag**2+2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**2)
         unc_E_ph = py.sqrt((self.getFImag()**2*unc_E_real**2+self.getFReal()**2*unc_E_imag**2-2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**4)
         
         t=py.column_stack((self.getfreqs(),unc_E_real,unc_E_imag,unc_E_abs,unc_E_ph))
         return self.getcroppedData(t)  
+    
+    def calculateFDunc(self):
+        unc_ex_sq=py.asmatrix(self._tdData.getUncEX()**2)
+        times=py.asmatrix(self._tdData.getTimes())
+        freqs=py.asmatrix(self.getfreqs())
+
+        unc_E_real=py.asmatrix(py.asarray(py.cos(2*py.pi*freqs.transpose()*times))**2)*unc_ex_sq.transpose()
+        unc_E_imag=py.asmatrix(py.asarray(py.sin(2*py.pi*freqs.transpose()*times))**2)*unc_ex_sq.transpose()
+        cov=(-0.5*py.sin(4*py.pi*freqs.transpose()*times)*unc_ex_sq.transpose())
+
+        
+        unc_E_real = py.sqrt(py.asarray(unc_E_real))[:,0]
+        unc_E_imag = py.sqrt(py.asarray(unc_E_imag))[:,0]
+        cov = py.asarray(cov)[:,0]
+
+        # Calculates the uncertainty of the modulus and phase of the FFT
+        unc_E_abs = py.sqrt((self.getFReal()**2*unc_E_real**2+self.getFImag()**2*unc_E_imag**2+2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**2)
+        unc_E_ph = py.sqrt((self.getFImag()**2*unc_E_real**2+self.getFReal()**2*unc_E_imag**2-2*self.getFReal()*self.getFImag()*cov)/self.getFAbs()**4)
+
+        t=py.column_stack((self.getfreqs(),unc_E_real,unc_E_imag,unc_E_abs,unc_E_ph))
+        return self.getcroppedData(t)  
+    
 
     def doPlot(self):
         #plot the absolute and phase of the fdData array
@@ -662,15 +704,22 @@ class FdData():
         #return the underlying tdData object
         return self._tdData
 
-    def getBandwidth(self,dbDistancetoNoise=15):
+    def getBandwidth(self,dbDistancetoNoise=5):
         #this function should return the lowest trustable and highest trustable
         #frequency, along with the resulting bandwidth
         
-        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
-        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
+        absdata=20*py.log10(self.getFAbs()/max(self.getFAbs()))
+        maxSNR=20*py.log10(max(self.getSNR()))
+        ix=maxSNR-dbDistancetoNoise>-absdata #dangerous, due to sidelobes, there might be some high freq component!
         tfr=self.getfreqs()[ix]
-
-        return min(tfr),max(tfr)
+        dtfr=py.diff(tfr)
+        frequencygaps=py.where(dtfr>100e9)[0]
+        if len(frequencygaps)==0:
+            itemix=-1
+        else:
+            itemix=frequencygaps[0]
+        
+        return [min(tfr),tfr[itemix]]
 
     def getcroppedData(self,data,startfreq=FMIN,endfreq=FMAX):
         #this function returns the array data cropped from startfreq to endfreq
@@ -845,7 +894,7 @@ class FdData():
     def setPhase(self,newPh):
         #sets the Phase, needed for example for removing offsets
         if len(newPh)!=self.getLength():
-            print 'Setting phase not possible, wrong length'
+            print( 'Setting phase not possible, wrong length')
         else:
             self.fdData[:,4]=newPh
 
@@ -859,3 +908,7 @@ class FdData():
         bnds=[min(self.getfreqs()),max(self.getfreqs())]
         zpd=self._calculatefdData(self._tdData)
         self.setFDData(self.getcroppedData(zpd,bnds[0],bnds[1]))
+        
+if __name__ == '__main__':
+    myTDData=ImportInrimData(['2015-02-19T140227_fw0_.dat'])
+    myFDData=FdData(myTDData)
