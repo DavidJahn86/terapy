@@ -64,9 +64,9 @@ if __name__=='__main__':
             self.mplwidget.axes.append(self.mplwidget.figure.add_subplot(111))
             self.plot(self.mplwidget.axes)
             x=linspace(-10,10)            
-            newline=self.mplwidget.axes[0].plot(x,x**4)
+            newline,=self.mplwidget.axes[0].plot(x,x**4)
             oldline=self.mplwidget.axes[0].lines[0]
-            self.updateplot(self.mplwidget.axes[0],oldline,newline)
+#            self.updateplot(self.mplwidget.axes[0],oldline,newline)
             
         def plot(self,axes):
             
