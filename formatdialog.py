@@ -20,7 +20,7 @@ class FormatDialog(QtGui.QDialog):
     def setFilenames(self,fn):
         self.filenames=fn
         for fn in self.filenames:
-            self.ui.lw_inputfiles.addItem(QtGui.QListWidgetItem(path.split(fn)[1]))
+            self.ui.lw_inputfiles.addItem(QtGui.QListWidgetItem(path.split(str(fn))[1]))
         
 #        self.autoDetectFileFormat()
     

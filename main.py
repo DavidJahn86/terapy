@@ -170,13 +170,13 @@ class MyWindow(QtGui.QMainWindow):
                 
         fileformat=myformatdialog.getDataFormat()
         if myformatdialog.doAveraging():
-            display_filename=path.split(filenames[0])[1]
+            display_filename=path.split(str(filenames[0]))[1]
             for i in range(1,len(filenames)):
-                display_filename+=" \n" + path.split(filenames[i])[1]
+                display_filename+=" \n" + path.split(str(filenames[i]))[1]
             x=self.fillTree(display_filename,filenames,fileformat) 
         else:          
             for fn in filenames:
-                x=self.fillTree(path.split(fn)[1],[fn],fileformat)            
+                x=self.fillTree(path.split(str(fn))[1],[fn],fileformat)
                     
         return filenames
         
@@ -186,7 +186,7 @@ class MyWindow(QtGui.QMainWindow):
        
         x.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsUserCheckable | 
                    QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsDragEnabled| QtCore.Qt.ItemIsEditable)
-        x.tdData=TeraData.THzTdData(filenames,fileformat)
+        x.tdData=TeraData.THzTdData(map(str,filenames),fileformat)
         x.fdData=TeraData.FdData(x.tdData)
         
         x.setCheckState(0,QtCore.Qt.Checked)
