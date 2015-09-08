@@ -86,8 +86,8 @@ class MyWindow(QtGui.QMainWindow):
 
     def plotspecial(self,what):
         curvelist=[]
-        for i in range(2,self.ui.cb_whichplots.count()):
-            curvelist.append(self.ui.cb_whichplots.itemText(i))
+        for i in range(self.ui.fileTree.topLevelItemCount()):
+            curvelist.append(self.ui.fileTree.topLevelItem(i).text(1))
 
         myplotdialog=PlotsToChange(curvelist,"Select Data for which you want the " + what + " plotted: ")
         if myplotdialog.exec_()==QtGui.QDialog.Rejected:
