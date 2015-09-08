@@ -14,4 +14,18 @@ class THzTreeWidgetItem(QtGui.QTreeWidgetItem):
         self.fdData=None
         self.tdline=[]
         self.fdline=[]
-        self.color=None    
+        self.color=None
+        
+    def removeLines(self):
+        for line in self.tdline:
+            line.remove()
+
+        for line in self.fdline:
+            line.remove()
+        
+        print self.fdline
+        
+    def __del__(self):
+        print "item destructed"
+        
+        

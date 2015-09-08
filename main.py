@@ -33,10 +33,32 @@ class MyWindow(QtGui.QMainWindow):
         
         self.ui.fileTree.itemChanged.connect(self.updateSpectrumAnalysisPlot)
         self.ui.fileTree.itemDoubleClicked.connect(self.onTreeWidgetItemDoubleClicked)
+        self.ui.fileTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.ui.fileTree.customContextMenuRequested.connect(self.onCustomContextMenu)
         self.ui.pb_tdoperations.clicked.connect(self.applytdchanges)
         
+        
+        self.removeItemAction=QtGui.QAction(self)
+        self.removeItemAction.triggered.connect(self.removeCurrentlySelectedItem)
+        self.removeItemAction.setText('Remove Selected Entry')
+        
+        self.ItemMenu=QtGui.QMenu(self)
+        self.ItemMenu.addAction(self.removeItemAction)        
         self.show()
     
+    def removeCurrentlySelectedItem(self):
+        root=self.ui.fileTree.invisibleRootItem()
+        for item in self.ui.fileTree.selectedItems():
+            item.removeLines()
+            (item.parent() or root).removeChild(item)
+            
+        
+        print self.ui.spectrumCanvas.axes[0].lines
+        self.ui.spectrumCanvas.draw()
+    def onCustomContextMenu(self,point):
+        self.ItemMenu.exec_(self.ui.fileTree.mapToGlobal(point))
+        
+        
     def initializeSpectrumCanvas(self):
         
         self.ui.spectrumCanvas.axes.append(self.ui.spectrumCanvas.figure.add_subplot(2,1,1))
