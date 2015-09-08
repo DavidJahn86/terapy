@@ -60,7 +60,7 @@ class MyWindow(QtGui.QMainWindow):
         self.plotspecial('Dynamic Range')
     
     def plotuncertainty(self):
-        self.plotspecial('uncertainty interval')
+        self.plotspecial('uncertainty')
 
     def plotspecial(self,what):
         curvelist=[]
@@ -75,28 +75,38 @@ class MyWindow(QtGui.QMainWindow):
         
         #first try to add just to the first entry a new child        
         if where>1:
-            self.addSubplot(self.ui.fileTree.topLevelItem(where-2),what+' Plot')
+            for i in range(self.ui.fileTree.topLevelItem(where-2).childCount()):
+                
+                if self.ui.fileTree.topLevelItem(where-2).child(i).text(1).split(" ")[-1]==what:
+                    return 0
+            self.addSubplot(self.ui.fileTree.topLevelItem(where-2),what)
         else:
             for row in range(self.ui.fileTree.topLevelItemCount()):
                 if where==1 or self.ui.fileTree.topLevelItem(row).checkState(0):
-                    self.addSubplot(self.ui.fileTree.topLevelItem(row),what+' Plot')
+                    found=False
+                    for i in range(self.ui.fileTree.topLevelItem(row).childCount()):
+                        if self.ui.fileTree.topLevelItem(row).child(i).text(1).split(" ")[-1]==what:
+                            found=True
+                            break
+                    if not found:
+                        self.addSubplot(self.ui.fileTree.topLevelItem(row),what)
 
     def addSubplot(self,tlw,what):
         x=THzTreeWidgetItem()
-        x.setFlags(x.flags() | QtCore.Qt.ItemIsEditable)
+        
         x.setCheckState(0,QtCore.Qt.Checked)
-        x.setText(1,what)
+        leg_label=tlw.tdline[0].get_label()+" " + what
+        x.setText(1,leg_label)
             
-        if what=='SNR Plot':
-            leg_label=tlw.tdline[0].get_label()+" SNR"  
+        if what=='SNR':
             x.tdline=self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getSNR(),label=leg_label)
             x.fdline=self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()/1e3,20*np.log10(tlw.fdData.getSNR()),label=leg_label)
             x.setCheckState(0,QtCore.Qt.Checked)
      
             x.setText(2,'test')
             x.setText(3,'test')
-        if what=='uncertainty interval Plot':
-            leg_label=tlw.tdline[0].get_label()+' uncertainty'
+        if what=='uncertainty':
+            
             #plot absolute and phase along with uncertainties
             f=1
             uabs=unumpy.uarray(tlw.fdData.getFAbs(),tlw.fdData.getFAbsUnc())
@@ -114,15 +124,16 @@ class MyWindow(QtGui.QMainWindow):
 
             x.setText(2,'test')
             x.setText(3,'test')
-        if what=='Dynamic Range Plot':             
-            leg_label=tlw.tdline[0].get_label()+' DR'                    
-
+        if what=='Dynamic Range':             
+            
             x.tdline=self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getDR(),label=leg_label)
             x.fdline=self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()/1e3,tlw.fdData.getDR(),label=leg_label)
             x.setText(2,'test')
             x.setText(3,'test')
         
         tlw.addChild(x)
+        self.ui.spectrumCanvas.axes[0].legend()
+        self.ui.spectrumCanvas.axes[1].legend()
         self.ui.spectrumCanvas.draw()
     
     def applytdchanges(self):
@@ -158,16 +169,15 @@ class MyWindow(QtGui.QMainWindow):
             
     def loadFile(self):
         filenames=QtGui.QFileDialog.getOpenFileNames()
-        print filenames[0]
         if len(filenames)==0:
             return 
             
         myformatdialog=FormatDialog()
-        myformatdialog.setFilenames(filenames)
         
+        myformatdialog.setFilenames(filenames)
+        self.ui.mainStatus.showMessage("Load Files")
         if myformatdialog.exec_()==QtGui.QDialog.Rejected:
             return
-                
         fileformat=myformatdialog.getDataFormat()
         if myformatdialog.doAveraging():
             display_filename=path.split(str(filenames[0]))[1]
@@ -177,7 +187,8 @@ class MyWindow(QtGui.QMainWindow):
         else:          
             for fn in filenames:
                 x=self.fillTree(path.split(str(fn))[1],[fn],fileformat)
-                    
+        self.ui.mainStatus.clearMessage()
+        
         return filenames
         
     def fillTree(self,display_filename,filenames,fileformat):
@@ -208,29 +219,35 @@ class MyWindow(QtGui.QMainWindow):
             
             item.tdline[0].set_label(item.text(1))
             for i in range(item.childCount()):
-                oldlabel=item.child(i).tdline[0].get_label()
+                oldlabel=item.child(i).text(1)
                 item.child(i).tdline[0].set_label(item.text(1) +" " +oldlabel.split(" ")[-1])
+                item.child(i).setText(1,item.text(1) +" " +oldlabel.split(" ")[-1])
             
             item.fdline[0].set_label(item.text(1))
             for i in range(item.childCount()):
-                oldlabel=item.child(i).fdline[0].get_label()
+                oldlabel=item.child(i).text(1)
                 item.child(i).fdline[0].set_label(item.text(1) + " " + oldlabel.split(" ")[-1])
+                item.child(i).setText(1,item.text(1) +" " +oldlabel.split(" ")[-1])
                 
         #the plots status changed
         if column ==0:
             if item.checkState(0):
                 for line in item.tdline:
 #                    self.ui.spectrumCanvas.axes[0].add_line(line)
+                    line.set_label(item.text(1))
                     line.set_visible(True)
                 for line in item.fdline:
 #                    self.ui.spectrumCanvas.axes[1].add_line(line)
+                    line.set_label(item.text(1))
                     line.set_visible(True)
             else:
                 for line in item.tdline:
 #                    line.remove()
+                    line.set_label(None)
                     line.set_visible(False)
                 for line in item.fdline:
 #                    line.remove()
+                    line.set_label(None)
                     line.set_visible(False)
                     
         self.ui.spectrumCanvas.axes[0].legend()

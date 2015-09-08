@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'mainwindow.ui'
 #
-# Created: Wed Aug 26 15:20:56 2015
+# Created: Tue Sep  8 13:29:27 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -144,7 +144,7 @@ class Ui_TeraView(object):
         self.horizontalLayout_3.addLayout(self.horizontalLayout)
         TeraView.setCentralWidget(self.centralWidget)
         self.menuBar = QtGui.QMenuBar(TeraView)
-        self.menuBar.setGeometry(QtCore.QRect(0, 0, 1247, 31))
+        self.menuBar.setGeometry(QtCore.QRect(0, 0, 1247, 25))
         self.menuBar.setObjectName(_fromUtf8("menuBar"))
         self.menuFile = QtGui.QMenu(self.menuBar)
         self.menuFile.setObjectName(_fromUtf8("menuFile"))
@@ -156,9 +156,10 @@ class Ui_TeraView(object):
         self.mainToolBar = QtGui.QToolBar(TeraView)
         self.mainToolBar.setObjectName(_fromUtf8("mainToolBar"))
         TeraView.addToolBar(QtCore.Qt.TopToolBarArea, self.mainToolBar)
-        self.statusBar = QtGui.QStatusBar(TeraView)
-        self.statusBar.setObjectName(_fromUtf8("statusBar"))
-        TeraView.setStatusBar(self.statusBar)
+        self.mainStatus = QtGui.QStatusBar(TeraView)
+        self.mainStatus.setSizeGripEnabled(True)
+        self.mainStatus.setObjectName(_fromUtf8("mainStatus"))
+        TeraView.setStatusBar(self.mainStatus)
         self.actionLoad = QtGui.QAction(TeraView)
         self.actionLoad.setObjectName(_fromUtf8("actionLoad"))
         self.actionClose = QtGui.QAction(TeraView)
@@ -199,7 +200,7 @@ class Ui_TeraView(object):
         self.label_6.setText(_translate("TeraView", "Apply changes to ", None))
         self.cb_whichplots.setItemText(0, _translate("TeraView", "All Selected", None))
         self.cb_whichplots.setItemText(1, _translate("TeraView", "All", None))
-       
+        
         self.cb_windowing.setItemText(0, _translate("TeraView", "No", None))
         self.cb_windowing.setItemText(1, _translate("TeraView", "Rectangular", None))
         self.cb_windowing.setItemText(2, _translate("TeraView", "Blackman", None))
