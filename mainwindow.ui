@@ -80,150 +80,6 @@
                </property>
               </column>
              </widget>
-             <widget class="QGroupBox" name="groupBox">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="MinimumExpanding">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="title">
-               <string>Preferences</string>
-              </property>
-              <layout class="QVBoxLayout" name="verticalLayout_3">
-               <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_6">
-                 <item>
-                  <widget class="QLabel" name="label_6">
-                   <property name="text">
-                    <string>Apply changes to </string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QComboBox" name="cb_whichplots">
-                   <item>
-                    <property name="text">
-                     <string>All Selected</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>All</string>
-                    </property>
-                   </item>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_2">
-                 <item>
-                  <widget class="QComboBox" name="cb_windowing">
-                   <property name="currentText">
-                    <string>No</string>
-                   </property>
-                   <property name="currentIndex">
-                    <number>0</number>
-                   </property>
-                   <item>
-                    <property name="text">
-                     <string>No</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Rectangular</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Blackman</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Hamming</string>
-                    </property>
-                   </item>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QLabel" name="label_3">
-                   <property name="text">
-                    <string>windowing from</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QDoubleSpinBox" name="dsb_windowfrom"/>
-                 </item>
-                 <item>
-                  <widget class="QLabel" name="label">
-                   <property name="text">
-                    <string>ps to</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QDoubleSpinBox" name="dsb_windowto"/>
-                 </item>
-                 <item>
-                  <widget class="QLabel" name="label_2">
-                   <property name="text">
-                    <string>ps</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_4">
-                 <item>
-                  <widget class="QCheckBox" name="cb_zeropadding">
-                   <property name="text">
-                    <string>Zeropadding</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QLabel" name="label_4">
-                   <property name="text">
-                    <string>Append an absolute Number of </string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QSpinBox" name="sb_nozeros">
-                   <property name="maximum">
-                    <number>100000</number>
-                   </property>
-                   <property name="singleStep">
-                    <number>10</number>
-                   </property>
-                   <property name="value">
-                    <number>100</number>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QLabel" name="label_5">
-                   <property name="text">
-                    <string>zeros</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <widget class="QPushButton" name="pb_tdoperations">
-                 <property name="text">
-                  <string>Apply Changes</string>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </widget>
             </widget>
            </widget>
           </item>
@@ -277,8 +133,24 @@
     </widget>
     <addaction name="menuSpectrum_Analysis"/>
    </widget>
+   <widget class="QMenu" name="menuData_Operations">
+    <property name="title">
+     <string>Data Operations</string>
+    </property>
+    <widget class="QMenu" name="menuTime_Domain">
+     <property name="title">
+      <string>Time Domain</string>
+     </property>
+     <addaction name="actionZero_Padding"/>
+     <addaction name="actionWindowing"/>
+     <addaction name="actionScale_Data"/>
+    </widget>
+    <addaction name="menuTime_Domain"/>
+    <addaction name="actionFrequency_Domain"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menuPlots"/>
+   <addaction name="menuData_Operations"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
    <attribute name="toolBarArea">
@@ -326,6 +198,26 @@
   <action name="actionNoise_Floor_from_fft">
    <property name="text">
     <string>Noise Floor from fft</string>
+   </property>
+  </action>
+  <action name="actionFrequency_Domain">
+   <property name="text">
+    <string>Frequency Domain</string>
+   </property>
+  </action>
+  <action name="actionZero_Padding">
+   <property name="text">
+    <string>Zero Padding</string>
+   </property>
+  </action>
+  <action name="actionWindowing">
+   <property name="text">
+    <string>Windowing</string>
+   </property>
+  </action>
+  <action name="actionScale_Data">
+   <property name="text">
+    <string>Modify Data</string>
    </property>
   </action>
  </widget>

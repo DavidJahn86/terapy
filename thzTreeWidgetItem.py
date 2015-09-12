@@ -13,19 +13,21 @@ class THzTreeWidgetItem(QtGui.QTreeWidgetItem):
         self.tdData=None
         self.fdData=None
         self.tdline=[]
-        self.fdline=[]
+        self.fdlineabs=[]
+        self.fdlinephase=[]
         self.color=None
         
-    def removeLines(self):
+    def __del__(self):
         for line in self.tdline:
             line.remove()
 
-        for line in self.fdline:
+        for line in self.fdlineabs:
             line.remove()
         
-        print self.fdline
+        for line in self.fdlinephase:
+            line.remove()
+                
+        self.refreshCanvas()
         
-    def __del__(self):
-        print "item destructed"
-        
-        
+    def refreshCanvas(self):
+        print "Callback not defined"
