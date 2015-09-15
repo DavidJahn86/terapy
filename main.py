@@ -36,40 +36,67 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.fileTree.itemDoubleClicked.connect(self.onTreeWidgetItemDoubleClicked)
         self.ui.fileTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.fileTree.customContextMenuRequested.connect(self.onCustomContextMenu)
-                
+         
         self.removeItemAction=QtGui.QAction(self)
         self.removeItemAction.triggered.connect(self.removeCurrentlySelectedItem)
         self.removeItemAction.setText('Remove Selected Entry')
         
-        self.ItemMenu=QtGui.QMenu(self)
-        self.ItemMenu.addAction(self.removeItemAction)        
+        self.TopLevelItemMenu=QtGui.QMenu(self)
+        self.ChildMenu=QtGui.QMenu(self)
+                
+        self.TopLevelItemMenu.addAction(self.ui.menuSpectrum_Analysis.menuAction())
+        self.TopLevelItemMenu.addSeparator()
+        self.TopLevelItemMenu.addAction(self.removeItemAction)        
+        self.ChildMenu.addAction(self.removeItemAction)
+         
         self.show()
     
     def refreshCanvas(self):
-        self.ui.spectrumCanvas.axes[0].legend()
-        self.ui.spectrumCanvas.axes[1].legend()
-        self.ui.spectrumCanvas.axes[2].legend()
+#        self.ui.spectrumCanvas.axes[0].legend(loc='upper left',bbox_to_anchor=(-0.1, 0))
+#        self.ui.spectrumCanvas.axes[1].legend(loc='lower left',bbox_to_anchor=(0.5, 0.5))
+#        self.ui.spectrumCanvas.axes[2].legend(loc='upper left')
+#        self.ui.spectrumCanvas.axes[3].legend(loc='upper right')        
+#        self.ui.spectrumCanvas.axes[4].legend(loc='upper right')
         self.ui.spectrumCanvas.draw()
     
     def removeCurrentlySelectedItem(self):
-        root=self.ui.fileTree.invisibleRootItem()
-        for item in self.ui.fileTree.selectedItems():
-            (item.parent() or root).removeChild(item)
+        msg=QtGui.QMessageBox()
+        msg.setText("Remove Item permanently?")
+        msg.setStandardButtons(QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel)
+        msg.setDefaultButton(QtGui.QMessageBox.Ok)
+        
+        if msg.exec_()==QtGui.QMessageBox.Ok:
+            root=self.ui.fileTree.invisibleRootItem()
+            for item in self.ui.fileTree.selectedItems():
+                (item.parent() or root).removeChild(item)
 
     def onCustomContextMenu(self,point):
-        
-        if self.ui.fileTree.itemAt(point) != None and self.ui.fileTree.itemAt(point).isSelected():
-            self.ItemMenu.exec_(self.ui.fileTree.mapToGlobal(point))
-        
+        item=self.ui.fileTree.itemAt(point)
+        if item != None and item.isSelected():
+            if item.parent()==None:
+                self.TopLevelItemMenu.exec_(self.ui.fileTree.mapToGlobal(point))
+            else:
+                self.ChildMenu.exec_(self.ui.fileTree.mapToGlobal(point))
         
     def initializeSpectrumCanvas(self):
         gs = gridspec.GridSpec(2, 2)
         
+        #initialize the three main plots
         self.ui.spectrumCanvas.axes.append(self.ui.spectrumCanvas.figure.add_subplot(gs[0,:]))
         self.ui.spectrumCanvas.axes.append(self.ui.spectrumCanvas.figure.add_subplot(gs[1,0]))
         self.ui.spectrumCanvas.axes.append(self.ui.spectrumCanvas.figure.add_subplot(gs[1,1]))
-        
+      
         ax=self.ui.spectrumCanvas.axes
+        
+        #add twinned axes for subplots
+        ax_SNRTD=ax[0].twinx()
+        ax_SNRTD.axes.get_yaxis().set_visible(False)       
+        self.ui.spectrumCanvas.axes.append(ax_SNRTD)
+        
+        ax_SNRFD=ax[1].twinx()
+        ax_SNRFD.axes.get_yaxis().set_visible(False)       
+        self.ui.spectrumCanvas.axes.append(ax_SNRFD)
+                
         
         ax[0].set_xlabel('time in ps')
         ax[0].set_ylabel('Amplitude')        
@@ -106,7 +133,6 @@ class MyWindow(QtGui.QMainWindow):
         #first try to add just to the first entry a new child        
         if where>1:
             for i in range(self.ui.fileTree.topLevelItem(where-2).childCount()):
-                
                 if self.ui.fileTree.topLevelItem(where-2).child(i).text(1).split(" ")[-1]==what:
                     return 0
             self.addSubplot(self.ui.fileTree.topLevelItem(where-2),what)
@@ -123,19 +149,25 @@ class MyWindow(QtGui.QMainWindow):
 
     def addSubplot(self,tlw,what):
         x=THzTreeWidgetItem()
-        x.refreshCanvas=self.refreshCanvas
         x.setCheckState(0,QtCore.Qt.Checked)
         leg_label=tlw.text(1)+" " + what
         x.setText(1,leg_label)
-            
+        x.refreshCanvas=self.refreshCanvas
+      
         if what=='SNR':
-            x.tdline=self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getSNR(),label=leg_label)
-            x.fdlineabs=self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()/1e3,20*np.log10(tlw.fdData.getSNR()),label=leg_label)
+            ax_SNRTD=self.ui.spectrumCanvas.figure.axes[3]
+            ax_SNRTD.axes.get_yaxis().set_visible(True)
+            ax_SNRFD=self.ui.spectrumCanvas.figure.axes[4]
+            ax_SNRFD.axes.get_yaxis().set_visible(True)
+                        
+            x.tdline=ax_SNRTD.plot(tlw.tdData.getTimesPs(),tlw.tdData.getSNR(),'--',label=leg_label,color=tlw.color)
+            x.fdlineabs=ax_SNRFD.plot(tlw.fdData.getfreqsGHz()/1e3,20*np.log10(tlw.fdData.getSNR()),'--',label=leg_label,color=tlw.color)
 #            x.fdlineabs=self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()/1e3,20*np.log10(tlw.fdData.getSNR()),label=leg_label)
             x.setCheckState(0,QtCore.Qt.Checked)
-     
+            x.color=tlw.color
             x.setText(2,'test')
             x.setText(3,'test')
+            pattern=QtCore.Qt.Dense3Pattern
         if what=='uncertainty':
             
             #plot absolute and phase along with uncertainties
@@ -146,22 +178,31 @@ class MyWindow(QtGui.QMainWindow):
             uabs-=np.amax(uabs)
             u_a=unumpy.nominal_values(uabs)
             u_s=unumpy.std_devs(uabs)
-            
-            x.tdline.append(self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getEX()+tlw.tdData.getUncEX(),linestyle='--',color=tlw.color))
-            x.tdline.append(self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getEX()-tlw.tdData.getUncEX(),linestyle='--',color=tlw.color,label=leg_label))
+            x.tdline.append(self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getEX()+tlw.tdData.getUncEX(),linestyle='--',color=tlw.color)[0])
+            x.tdline.append(self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getEX()-tlw.tdData.getUncEX(),linestyle='--',color=tlw.color,label=leg_label)[0])
      
-            x.fdlineabs.append(self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,u_a[1:]+u_s[1:],linestyle='--',color=tlw.color))
-            x.fdlineabs.append(self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,u_a[1:]-u_s[1:],linestyle='--',color=tlw.color,label=leg_label))
-     
+            x.fdlineabs.append(self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,u_a[1:]+u_s[1:],linestyle='--',color=tlw.color)[0])
+            x.fdlineabs.append(self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,u_a[1:]-u_s[1:],linestyle='--',color=tlw.color,label=leg_label)[0])
+            x.color=tlw.color
             x.setText(2,'test')
             x.setText(3,'test')
+            pattern=QtCore.Qt.Dense3Pattern
         if what=='Dynamic Range':             
+            ax_DRTD=self.ui.spectrumCanvas.figure.axes[3]
+            ax_DRTD.axes.get_yaxis().set_visible(True)
+            ax_DRFD=self.ui.spectrumCanvas.figure.axes[4]
+            ax_DRFD.axes.get_yaxis().set_visible(True)
             
-            x.tdline=self.ui.spectrumCanvas.figure.axes[0].plot(tlw.tdData.getTimesPs(),tlw.tdData.getDR(),label=leg_label)
-            x.fdlineabs=self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()/1e3,tlw.fdData.getDR(),label=leg_label)
+            x.tdline=ax_DRTD.plot(tlw.tdData.getTimesPs(),tlw.tdData.getDR(),'-.',label=leg_label,color=tlw.color)
+            x.fdlineabs=ax_DRFD.plot(tlw.fdData.getfreqsGHz()/1e3,tlw.fdData.getDR(),'-.',label=leg_label,color=tlw.color)
+            x.color=tlw.color            
             x.setText(2,'test')
             x.setText(3,'test')
-        
+            pattern=QtCore.Qt.Dense6Pattern
+            
+        col=QtGui.QColor(int(x.color[0]*255),int(x.color[1]*255),int(x.color[2]*255),int(x.color[3]*255))
+        brush=QtGui.QBrush(col,pattern)        
+        x.setBackground(0,brush)
         tlw.addChild(x)
         self.refreshCanvas()
         
@@ -211,17 +252,17 @@ class MyWindow(QtGui.QMainWindow):
         x=THzTreeWidgetItem()
         x.refreshCanvas=self.refreshCanvas
         x.setFlags(x.flags() | QtCore.Qt.ItemIsEditable)
-        x.tdData=TeraData.THzTdData(map(str,filenames),fileformat)
+        x.tdData=TeraData.THzTdData(filenames,fileformat)
         x.fdData=TeraData.FdData(x.tdData)
-        
         x.setCheckState(0,QtCore.Qt.Checked)
         x.setText(1,display_filename)
         self.updateDetails(x)        
         self.doTdFdPlot(x)
         self.ui.fileTree.addTopLevelItem(x)
         
-        return x
-        
+        col=QtGui.QColor(int(x.color[0]*255),int(x.color[1]*255),int(x.color[2]*255),int(x.color[3]*255))
+        x.setBackgroundColor(0,col)
+        return x        
     
     def updateSpectrumAnalysisPlot(self,item,column):
         #something else happened so return
@@ -248,11 +289,19 @@ class MyWindow(QtGui.QMainWindow):
                 for line in item.tdline+item.fdlineabs+item.fdlinephase:
                     line.set_label(item.text(1))
                     line.set_visible(True)
+                    line.axes.get_yaxis().set_visible(True)
             else:
                 for line in item.tdline+item.fdlineabs+item.fdlinephase:
-#                    line.remove()
                     line.set_label(None)
                     line.set_visible(False)
+                    found=False
+                    #switch axes labeling off, if this was the last visible line                    
+                    for l in line.axes.lines:
+                        if l.get_visible()==True:
+                            found=True
+                            break
+                    if not found:
+                        line.axes.get_yaxis().set_visible(False)
                     
         self.refreshCanvas()
         
@@ -271,7 +320,7 @@ class MyWindow(QtGui.QMainWindow):
     def doTdFdPlot(self,thztreeitem):
         #in case no color yet defined
         if thztreeitem.color==None:
-            thztreeitem.color=plt.cm.hsv(np.random.rand(1)[0])
+            thztreeitem.color=plt.cm.brg(np.random.rand(1)[0])
 
         #in case of update, remove existing lines from plot, 
         for line in thztreeitem.tdline:

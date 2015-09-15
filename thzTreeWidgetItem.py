@@ -30,4 +30,4 @@ class THzTreeWidgetItem(QtGui.QTreeWidgetItem):
         self.refreshCanvas()
         
     def refreshCanvas(self):
-        print "Callback not defined"
+        print("Callback not defined")
