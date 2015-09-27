@@ -24,7 +24,7 @@ class MyWindow(QtGui.QMainWindow):
         self.ui=Ui_TeraView()
         self.ui.setupUi(self)
         self.initializeSpectrumCanvas()
-        
+            
         self.ui.actionClose.triggered.connect(QtGui.qApp.quit)
         self.ui.actionLoad.triggered.connect(self.loadFile)
 
@@ -32,11 +32,24 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.actionPlot_SNR.triggered.connect(self.plotSNR)
         self.ui.actionPlot_uncertainty_intervals.triggered.connect(self.plotuncertainty)
         
+        self.ui.actionScale_Data.triggered.connect(self.showDataManipulation)
+        self.ui.actionWindowing.triggered.connect(self.showWindowing) 
         self.ui.fileTree.itemChanged.connect(self.updateSpectrumAnalysisPlot)
         self.ui.fileTree.itemDoubleClicked.connect(self.onTreeWidgetItemDoubleClicked)
         self.ui.fileTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.fileTree.customContextMenuRequested.connect(self.onCustomContextMenu)
-         
+        
+        self.ui.preferences.hide()
+        #this is the first combobox of this type, but i will use it at several places again
+        self.cbwhichGraphsModel=self.ui.cbwhichGraphs.model()
+        print(self.cbwhichGraphsModel.columnCount())
+#        self.ui.cbwhichGraphs.setModel()
+        
+        #Actions in Spectrum analysis
+        self.ui.pbApplyTDManiuplation.clicked.connect(self.applyTDManipulation)        
+        self.ui.pbTDManipulatePreview.clicked.connect(self.dataManipulationTemporarilyUpdatePlot) 
+        self.ui.pbCancelTDManipulation.clicked.connect(self.cancelPreferences)
+        
         self.removeItemAction=QtGui.QAction(self)
         self.removeItemAction.triggered.connect(self.removeCurrentlySelectedItem)
         self.removeItemAction.setText('Remove Selected Entry')
@@ -51,12 +64,69 @@ class MyWindow(QtGui.QMainWindow):
          
         self.show()
     
+    def showWindowing(self):
+        self.ui.preferences.setCurrentIndex(1)
+        self.ui.preferences.show()
+    
+    def showDataManipulation(self):
+        self.ui.preferences.setCurrentIndex(0)
+        self.ui.preferences.show()
+        
+    def dataManipulationTemporarilyUpdatePlot(self):    
+        timeshift=self.ui.dsbTimeShift.value()
+        factor=self.ui.dsbAmplitudeFactor.value()
+       
+        where=self.ui.cbwhichGraphs.currentIndex()
+        
+        #first try to add just to the first entry a new child        
+        if where>1:
+            item=self.ui.fileTree.topLevelItem(where-2)
+            item.tdline[0].set_xdata(item.tdline[0].get_xdata()+timeshift)
+            if factor!=0:
+                item.tdline[0].set_ydata(item.tdline[0].get_ydata()*factor)
+        else:
+            for row in range(self.ui.fileTree.topLevelItemCount()):
+                if where==1 or self.ui.fileTree.topLevelItem(row).checkState(0):
+                    item=self.ui.fileTree.topLevelItem(row)
+                    item.tdline[0].set_xdata(item.tdline[0].get_xdata()+timeshift)
+                    if factor!=0:
+                        item.tdline[0].set_ydata(item.tdline[0].get_ydata()*factor)
+        self.refreshCanvas()
+    
+    def applyTDManipulation(self):
+        where=self.ui.cbwhichGraphs.currentIndex()
+        
+        #first try to add just to the first entry a new child        
+        if where>1:
+            item=self.ui.fileTree.topLevelItem(where-2)
+            if self.ui.rbManipulateCopy.isChecked():
+                tdData=TeraData.THzTdData()
+#                self.fillTree('copy ' + )
+            else:
+                pass 
+        else:
+            for row in range(self.ui.fileTree.topLevelItemCount()):
+                if where==1 or self.ui.fileTree.topLevelItem(row).checkState(0):
+                    item=self.ui.fileTree.topLevelItem(row)
+                    if self.ui.rbManipulateCopy.isChecked():
+                        pass
+#                        tdData=
+#                        self.fillTree('copy ' + )
+                    else:
+                        pass
+        
+        
+    def cancelPreferences(self):
+        #also take back the preview in plots
+        for i in range(self.ui.fileTree.topLevelItemCount()):
+            self.doTdFdPlot(self.ui.fileTree.topLevelItem(i))
+        self.ui.preferences.hide()       
+    
     def refreshCanvas(self):
-#        self.ui.spectrumCanvas.axes[0].legend(loc='upper left',bbox_to_anchor=(-0.1, 0))
-#        self.ui.spectrumCanvas.axes[1].legend(loc='lower left',bbox_to_anchor=(0.5, 0.5))
-#        self.ui.spectrumCanvas.axes[2].legend(loc='upper left')
-#        self.ui.spectrumCanvas.axes[3].legend(loc='upper right')        
-#        self.ui.spectrumCanvas.axes[4].legend(loc='upper right')
+        #no legends so far
+        for ax in self.ui.spectrumCanvas.axes:
+            ax.relim()
+            ax.autoscale_view()
         self.ui.spectrumCanvas.draw()
     
     def removeCurrentlySelectedItem(self):
@@ -66,6 +136,8 @@ class MyWindow(QtGui.QMainWindow):
         msg.setDefaultButton(QtGui.QMessageBox.Ok)
         
         if msg.exec_()==QtGui.QMessageBox.Ok:
+            index=self.ui.fileTree.selectedIndexes()[0].row()
+            self.ui.cbwhichGraphs.removeItem(index+2)       
             root=self.ui.fileTree.invisibleRootItem()
             for item in self.ui.fileTree.selectedItems():
                 (item.parent() or root).removeChild(item)
@@ -183,6 +255,10 @@ class MyWindow(QtGui.QMainWindow):
      
             x.fdlineabs.append(self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,u_a[1:]+u_s[1:],linestyle='--',color=tlw.color)[0])
             x.fdlineabs.append(self.ui.spectrumCanvas.figure.axes[1].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,u_a[1:]-u_s[1:],linestyle='--',color=tlw.color,label=leg_label)[0])
+
+            x.fdlinephase.append(self.ui.spectrumCanvas.figure.axes[2].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,tlw.fdData.getFPh()[1:]+tlw.fdData.getFPhUnc()[1:],linestyle='--',color=tlw.color)[0])
+            x.fdlinephase.append(self.ui.spectrumCanvas.figure.axes[2].plot(tlw.fdData.getfreqsGHz()[1:]/1e3,tlw.fdData.getFPh()[1:]-tlw.fdData.getFPhUnc()[1:],linestyle='--',color=tlw.color)[0])
+
             x.color=tlw.color
             x.setText(2,'test')
             x.setText(3,'test')
@@ -239,39 +315,44 @@ class MyWindow(QtGui.QMainWindow):
             display_filename=path.split(str(filenames[0]))[1]
             for i in range(1,len(filenames)):
                 display_filename+=" \n" + path.split(str(filenames[i]))[1]
-            x=self.fillTree(display_filename,filenames,fileformat) 
+            tdData=TeraData.THzTdData(filenames,fileformat)
+            x=self.fillTree(display_filename,tdData) 
         else:          
             for fn in filenames:
-                x=self.fillTree(path.split(str(fn))[1],[fn],fileformat)
+                tdData=TeraData.THzTdData([fn],fileformat)
+                x=self.fillTree(path.split(str(fn))[1],tdData)
         self.ui.mainStatus.clearMessage()
         
         return filenames
         
-    def fillTree(self,display_filename,filenames,fileformat):
+    def fillTree(self,display_filename,tdData):
             
         x=THzTreeWidgetItem()
         x.refreshCanvas=self.refreshCanvas
         x.setFlags(x.flags() | QtCore.Qt.ItemIsEditable)
-        x.tdData=TeraData.THzTdData(filenames,fileformat)
+        x.tdData=tdData
         x.fdData=TeraData.FdData(x.tdData)
         x.setCheckState(0,QtCore.Qt.Checked)
         x.setText(1,display_filename)
         self.updateDetails(x)        
         self.doTdFdPlot(x)
-        self.ui.fileTree.addTopLevelItem(x)
-        
+        self.ui.fileTree.addTopLevelItem(x)        
         col=QtGui.QColor(int(x.color[0]*255),int(x.color[1]*255),int(x.color[2]*255),int(x.color[3]*255))
         x.setBackgroundColor(0,col)
+        self.ui.cbwhichGraphs.addItem(x.text(1))        
+        self.ui.cbwhichGraphs.setItemData(self.ui.cbwhichGraphs.count()-1,col,QtCore.Qt.BackgroundRole)
         return x        
     
     def updateSpectrumAnalysisPlot(self,item,column):
         #something else happened so return
         if column>1:
             return
-            
+        
         #the name of the plot changed, so change legend entry!
+        #plot name not needed right now
         if column==1:
             
+            self.ui.cbwhichGraphs.setItemText(self.ui.fileTree.selectedIndexes()[0].row()+2,item.text(1))
             item.tdline[0].set_label(item.text(1))
             item.fdlineabs[0].set_label(item.text(1))
             item.fdlinephase[0].set_label(item.text(1))

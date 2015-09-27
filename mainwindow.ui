@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1247</width>
-    <height>475</height>
+    <height>587</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -26,7 +26,7 @@
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
-   <layout class="QHBoxLayout" name="horizontalLayout_3">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <item>
@@ -38,48 +38,1002 @@
          <attribute name="title">
           <string>Spectrum Analysis</string>
          </attribute>
-         <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
-           <widget class="QSplitter" name="splitter_2">
+           <widget class="QSplitter" name="splitter">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
+            <widget class="MatplotlibWidget" name="spectrumCanvas" native="true">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+            </widget>
             <widget class="QWidget" name="layoutWidget">
              <layout class="QVBoxLayout" name="verticalLayout">
               <item>
-               <widget class="MatplotlibWidget" name="spectrumCanvas" native="true"/>
+               <widget class="QTreeWidget" name="fileTree">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="editTriggers">
+                 <set>QAbstractItemView::NoEditTriggers</set>
+                </property>
+                <column>
+                 <property name="text">
+                  <string>Plot</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Name</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Time Domain Info</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Frequency Domain Info</string>
+                 </property>
+                </column>
+               </widget>
+              </item>
+              <item>
+               <widget class="QStackedWidget" name="preferences">
+                <property name="enabled">
+                 <bool>true</bool>
+                </property>
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <widget class="QWidget" name="tdmanipulation">
+                 <layout class="QHBoxLayout" name="horizontalLayout_3">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Time Domain Manipulation</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout">
+                     <item row="3" column="1" rowspan="2">
+                      <widget class="QDoubleSpinBox" name="dsbTimeShift">
+                       <property name="minimum">
+                        <double>-1500.000000000000000</double>
+                       </property>
+                       <property name="maximum">
+                        <double>1500.000000000000000</double>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="2">
+                      <widget class="QPushButton" name="pbApplyTDManiuplation">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="0">
+                      <widget class="QPushButton" name="pbCancelTDManipulation">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="1">
+                      <widget class="QPushButton" name="pbTDManipulatePreview">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label">
+                       <property name="text">
+                        <string>Rescale Amplitude </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="4" rowspan="5">
+                      <spacer name="horizontalSpacer">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="2" column="1">
+                      <widget class="QDoubleSpinBox" name="dsbAmplitudeFactor">
+                       <property name="decimals">
+                        <number>6</number>
+                       </property>
+                       <property name="minimum">
+                        <double>-9999.000000000000000</double>
+                       </property>
+                       <property name="maximum">
+                        <double>9999.000000000000000</double>
+                       </property>
+                       <property name="singleStep">
+                        <double>0.010000000000000</double>
+                       </property>
+                       <property name="value">
+                        <double>1.000000000000000</double>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="0" colspan="3">
+                      <widget class="QComboBox" name="cbwhichGraphs">
+                       <item>
+                        <property name="text">
+                         <string>Selected</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>All</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="3" column="0">
+                      <widget class="QLabel" name="label_2">
+                       <property name="text">
+                        <string>Shift Time Axis by</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="2">
+                      <widget class="QLabel" name="label_6">
+                       <property name="text">
+                        <string>ps</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="1">
+                      <widget class="QRadioButton" name="rbManipulateCopy">
+                       <property name="text">
+                        <string>Create a Copy</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="0">
+                      <widget class="QRadioButton" name="rbManipulateReplace">
+                       <property name="text">
+                        <string>Replace Data</string>
+                       </property>
+                       <property name="checked">
+                        <bool>true</bool>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="2">
+                      <widget class="QLineEdit" name="leNewName"/>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="tdcutting">
+                 <layout class="QHBoxLayout" name="horizontalLayout_4">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox_2">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Time Domain Windowing</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_2">
+                     <item row="4" column="4" rowspan="5">
+                      <spacer name="horizontalSpacer_2">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="7" column="2">
+                      <widget class="QPushButton" name="pbApplyWindowing">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="0">
+                      <widget class="QPushButton" name="pbCancelWindowing">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="1">
+                      <widget class="QPushButton" name="pbPreviewWindowing">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="0">
+                      <widget class="QLabel" name="label_4">
+                       <property name="text">
+                        <string>Flat Top of </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label_3">
+                       <property name="text">
+                        <string>Choose Window Function</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="0" colspan="3">
+                      <widget class="QComboBox" name="cbwhichGraphs_2">
+                       <item>
+                        <property name="text">
+                         <string>Selected</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>All</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="2" column="1" colspan="2">
+                      <widget class="QComboBox" name="cbwindowfunction">
+                       <item>
+                        <property name="text">
+                         <string>Blackman</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>other</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="3" column="2">
+                      <widget class="QLabel" name="label_5">
+                       <property name="text">
+                        <string>points</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="1">
+                      <widget class="QSpinBox" name="spinBox"/>
+                     </item>
+                     <item row="5" column="0">
+                      <widget class="QRadioButton" name="rbManipulateReplace_2">
+                       <property name="text">
+                        <string>Replace Data</string>
+                       </property>
+                       <property name="checked">
+                        <bool>true</bool>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="1">
+                      <widget class="QRadioButton" name="rbManipulateCopy_2">
+                       <property name="text">
+                        <string>Copy to </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="2">
+                      <widget class="QLineEdit" name="le_newName"/>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="tdzeropadding">
+                 <layout class="QHBoxLayout" name="horizontalLayout_5">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox_3">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Zero Padding</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_3">
+                     <item row="4" column="4" rowspan="5">
+                      <spacer name="horizontalSpacer_3">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="7" column="2">
+                      <widget class="QPushButton" name="pbApplyZeroPadding">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="0">
+                      <widget class="QPushButton" name="pbCancelPadding">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="1">
+                      <widget class="QPushButton" name="pbPreviewPadding">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="0">
+                      <widget class="QLabel" name="label_7">
+                       <property name="text">
+                        <string>Number of Zeros</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="0" colspan="3">
+                      <widget class="QComboBox" name="cbwhichGraphs_3">
+                       <item>
+                        <property name="text">
+                         <string>Selected</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>All</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="2" column="1" colspan="2">
+                      <widget class="QComboBox" name="cbZeroPadding">
+                       <item>
+                        <property name="text">
+                         <string>after data, plain zero</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>before data, plain zero</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>after data, gaussian</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>before data, gaussian</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="3" column="1">
+                      <widget class="QSpinBox" name="sbNumberZeros"/>
+                     </item>
+                     <item row="5" column="0">
+                      <widget class="QRadioButton" name="rbManipulateReplace_3">
+                       <property name="text">
+                        <string>Replace Data</string>
+                       </property>
+                       <property name="checked">
+                        <bool>true</bool>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="1">
+                      <widget class="QRadioButton" name="rbManipulateCopy_3">
+                       <property name="text">
+                        <string>Copy to </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="2">
+                      <widget class="QLineEdit" name="le_newName_2"/>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label_8">
+                       <property name="text">
+                        <string>Zero padd</string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="tdinterpolation">
+                 <layout class="QHBoxLayout" name="horizontalLayout_6">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox_4">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Interpolation of Time Domain Data</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_4">
+                     <item row="2" column="2">
+                      <widget class="QLabel" name="label_11">
+                       <property name="text">
+                        <string>fs timestep</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="1">
+                      <widget class="QDoubleSpinBox" name="dsbinterpolationStep">
+                       <property name="decimals">
+                        <number>1</number>
+                       </property>
+                       <property name="minimum">
+                        <double>1.000000000000000</double>
+                       </property>
+                       <property name="value">
+                        <double>20.000000000000000</double>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="6" column="2">
+                      <widget class="QPushButton" name="pbApplyInterpolation">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="4" rowspan="5">
+                      <spacer name="horizontalSpacer_4">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="6" column="0">
+                      <widget class="QPushButton" name="pbCancelInterpolation">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="6" column="1">
+                      <widget class="QPushButton" name="pbPreviewInterpolation">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="0">
+                      <widget class="QRadioButton" name="rbManipulateReplace_4">
+                       <property name="text">
+                        <string>Replace Data</string>
+                       </property>
+                       <property name="checked">
+                        <bool>true</bool>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="1">
+                      <widget class="QRadioButton" name="rbManipulateCopy_4">
+                       <property name="text">
+                        <string>Copy to </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="2">
+                      <widget class="QLineEdit" name="le_newName_3"/>
+                     </item>
+                     <item row="1" column="0" colspan="3">
+                      <widget class="QComboBox" name="cbwhichGraphs_4">
+                       <item>
+                        <property name="text">
+                         <string>Selected</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>All</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label_10">
+                       <property name="text">
+                        <string>Interpolation to </string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="averaging">
+                 <layout class="QHBoxLayout" name="horizontalLayout_9">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox_7">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Average Several Datasets</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_7">
+                     <item row="4" column="0">
+                      <widget class="QPushButton" name="pbCancelAveraging">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="2">
+                      <widget class="QPushButton" name="pbApplyAveraging">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="1">
+                      <widget class="QPushButton" name="pbPreviewAveraging">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="4" rowspan="5">
+                      <spacer name="horizontalSpacer_7">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="3" column="0">
+                      <widget class="QLabel" name="label_17">
+                       <property name="text">
+                        <string>New Name</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label_16">
+                       <property name="text">
+                        <string>Average  in </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="1" colspan="2">
+                      <widget class="QLineEdit" name="leNewName_3"/>
+                     </item>
+                     <item row="2" column="1" colspan="2">
+                      <widget class="QComboBox" name="cbAverageWhere">
+                       <item>
+                        <property name="text">
+                         <string>Time Domain</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>Frequency Domain</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="1" column="0" colspan="3">
+                      <widget class="QLabel" name="label_18">
+                       <property name="font">
+                        <font>
+                         <weight>75</weight>
+                         <bold>true</bold>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string>All checked Datasets will be averaged</string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="fdinterpolation">
+                 <layout class="QHBoxLayout" name="horizontalLayout_7">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox_5">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Interpolation of Frequency Domain Data</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_5">
+                     <item row="2" column="2">
+                      <widget class="QLabel" name="label_12">
+                       <property name="text">
+                        <string>GHz Frequency Step</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="1">
+                      <widget class="QDoubleSpinBox" name="dsbinterpolationStep_2">
+                       <property name="decimals">
+                        <number>1</number>
+                       </property>
+                       <property name="minimum">
+                        <double>1.000000000000000</double>
+                       </property>
+                       <property name="value">
+                        <double>20.000000000000000</double>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="6" column="2">
+                      <widget class="QPushButton" name="pbApplyInterpolation_2">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="4" rowspan="5">
+                      <spacer name="horizontalSpacer_5">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="6" column="0">
+                      <widget class="QPushButton" name="pbCancelInterpolation_2">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="6" column="1">
+                      <widget class="QPushButton" name="pbPreviewInterpolation_2">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="0">
+                      <widget class="QRadioButton" name="rbManipulateReplace_5">
+                       <property name="text">
+                        <string>Replace Data</string>
+                       </property>
+                       <property name="checked">
+                        <bool>true</bool>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="1">
+                      <widget class="QRadioButton" name="rbManipulateCopy_5">
+                       <property name="text">
+                        <string>Copy to </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="2">
+                      <widget class="QLineEdit" name="le_newName_4"/>
+                     </item>
+                     <item row="1" column="0" colspan="3">
+                      <widget class="QComboBox" name="cbwhichGraphs_5">
+                       <item>
+                        <property name="text">
+                         <string>Selected</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>All</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label_13">
+                       <property name="text">
+                        <string>Interpolation to </string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="fdmanipulation">
+                 <layout class="QHBoxLayout" name="horizontalLayout_8">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox_6">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Frequency Domain Data Manipulation</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_6">
+                     <item row="3" column="1" rowspan="2">
+                      <widget class="QDoubleSpinBox" name="dsbTimeShift_2">
+                       <property name="minimum">
+                        <double>-1500.000000000000000</double>
+                       </property>
+                       <property name="maximum">
+                        <double>1500.000000000000000</double>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="2">
+                      <widget class="QPushButton" name="pbApplyTDManiuplation_2">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="0">
+                      <widget class="QPushButton" name="pbCancelTDManipulation_2">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="7" column="1">
+                      <widget class="QPushButton" name="pbTDManipulatePreview_2">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label_9">
+                       <property name="text">
+                        <string>Rescale Amplitude </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="4" rowspan="5">
+                      <spacer name="horizontalSpacer_6">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="2" column="1">
+                      <widget class="QDoubleSpinBox" name="dsbAmplitudeFactor_2">
+                       <property name="decimals">
+                        <number>6</number>
+                       </property>
+                       <property name="minimum">
+                        <double>-9999.000000000000000</double>
+                       </property>
+                       <property name="maximum">
+                        <double>9999.000000000000000</double>
+                       </property>
+                       <property name="singleStep">
+                        <double>0.010000000000000</double>
+                       </property>
+                       <property name="value">
+                        <double>1.000000000000000</double>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="0" colspan="3">
+                      <widget class="QComboBox" name="cbwhichGraphs_6">
+                       <item>
+                        <property name="text">
+                         <string>Selected</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>All</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                     <item row="3" column="0">
+                      <widget class="QLabel" name="label_14">
+                       <property name="text">
+                        <string>Change phase slope by </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="2">
+                      <widget class="QLabel" name="label_15">
+                       <property name="text">
+                        <string/>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="1">
+                      <widget class="QRadioButton" name="rbManipulateCopy_6">
+                       <property name="text">
+                        <string>Create a Copy</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="0">
+                      <widget class="QRadioButton" name="rbManipulateReplace_6">
+                       <property name="text">
+                        <string>Replace Data</string>
+                       </property>
+                       <property name="checked">
+                        <bool>true</bool>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="5" column="2">
+                      <widget class="QLineEdit" name="leNewName_2"/>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="fdmovingaveraging">
+                 <layout class="QHBoxLayout" name="horizontalLayout_10">
+                  <item>
+                   <widget class="QGroupBox" name="groupBox_8">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="title">
+                     <string>Frequency Domain Moving Averaging</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_8">
+                     <item row="1" column="0">
+                      <widget class="QLabel" name="label_19">
+                       <property name="text">
+                        <string>Moving Average of </string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="1">
+                      <widget class="QSpinBox" name="spinBox_2"/>
+                     </item>
+                     <item row="1" column="2">
+                      <widget class="QLabel" name="label_22">
+                       <property name="text">
+                        <string>Points</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="1">
+                      <widget class="QRadioButton" name="rbManipulateCopy_7">
+                       <property name="text">
+                        <string>Create a Copy</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="0">
+                      <widget class="QPushButton" name="pbCancelTDManipulation_3">
+                       <property name="text">
+                        <string>Cancel</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="3">
+                      <spacer name="horizontalSpacer_8">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>654</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                     <item row="3" column="1">
+                      <widget class="QPushButton" name="pbTDManipulatePreview_3">
+                       <property name="text">
+                        <string>Preview</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QRadioButton" name="rbManipulateReplace_7">
+                       <property name="text">
+                        <string>Replace Data</string>
+                       </property>
+                       <property name="checked">
+                        <bool>true</bool>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="2">
+                      <widget class="QLineEdit" name="leNewName_4"/>
+                     </item>
+                     <item row="3" column="2">
+                      <widget class="QPushButton" name="pbApplyTDManiuplation_3">
+                       <property name="text">
+                        <string>Apply</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="0" colspan="3">
+                      <widget class="QComboBox" name="cbwhichGraphs_7">
+                       <item>
+                        <property name="text">
+                         <string>Selected</string>
+                        </property>
+                       </item>
+                       <item>
+                        <property name="text">
+                         <string>All</string>
+                        </property>
+                       </item>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="fdfiltering"/>
+               </widget>
               </item>
              </layout>
-            </widget>
-            <widget class="QSplitter" name="splitter">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <widget class="QTreeWidget" name="fileTree">
-              <property name="editTriggers">
-               <set>QAbstractItemView::NoEditTriggers</set>
-              </property>
-              <column>
-               <property name="text">
-                <string>Plot</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>Name</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>Time Domain Info</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>Frequency Domain Info</string>
-               </property>
-              </column>
-             </widget>
             </widget>
            </widget>
           </item>
@@ -107,7 +1061,7 @@
      <x>0</x>
      <y>0</y>
      <width>1247</width>
-     <height>25</height>
+     <height>31</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -144,6 +1098,8 @@
      <addaction name="actionZero_Padding"/>
      <addaction name="actionWindowing"/>
      <addaction name="actionScale_Data"/>
+     <addaction name="actionInterpolate_Data"/>
+     <addaction name="actionAverage_Datasets"/>
     </widget>
     <addaction name="menuTime_Domain"/>
     <addaction name="actionFrequency_Domain"/>
@@ -152,25 +1108,40 @@
    <addaction name="menuPlots"/>
    <addaction name="menuData_Operations"/>
   </widget>
-  <widget class="QToolBar" name="mainToolBar">
+  <widget class="QStatusBar" name="mainStatus">
+   <property name="sizeGripEnabled">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QToolBar" name="toolBar">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
    <attribute name="toolBarArea">
     <enum>TopToolBarArea</enum>
    </attribute>
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-  </widget>
-  <widget class="QStatusBar" name="mainStatus">
-   <property name="sizeGripEnabled">
-    <bool>true</bool>
-   </property>
+   <addaction name="actionLoad"/>
   </widget>
   <action name="actionLoad">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset>
+     <normaloff>../Pictures/icons/import-icon.png</normaloff>../Pictures/icons/import-icon.png</iconset>
+   </property>
    <property name="text">
     <string>Import</string>
    </property>
   </action>
   <action name="actionClose">
+   <property name="icon">
+    <iconset>
+     <normaloff>../Downloads/ToolbarIcons-full-20101107/png/32/Modern3D/objects/exit.png</normaloff>../Downloads/ToolbarIcons-full-20101107/png/32/Modern3D/objects/exit.png</iconset>
+   </property>
    <property name="text">
     <string>Close</string>
    </property>
@@ -218,6 +1189,16 @@
   <action name="actionScale_Data">
    <property name="text">
     <string>Modify Data</string>
+   </property>
+  </action>
+  <action name="actionInterpolate_Data">
+   <property name="text">
+    <string>Interpolate Data</string>
+   </property>
+  </action>
+  <action name="actionAverage_Datasets">
+   <property name="text">
+    <string>Average Datasets</string>
    </property>
   </action>
  </widget>
