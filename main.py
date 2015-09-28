@@ -100,10 +100,16 @@ class MyWindow(QtGui.QMainWindow):
         if where>1:
             item=self.ui.fileTree.topLevelItem(where-2)
             if self.ui.rbManipulateCopy.isChecked():
-                tdData=TeraData.THzTdData()
-#                self.fillTree('copy ' + )
+                tdData=item.tdData.tdData
+                tdData[:,0]=item.tdline[0].get_xdata()
+                tdData[:,1]=item.tdline[0].get_ydata()
+                #take care uncertainty missing!
+                ttdData=TeraData.THzTdData(tdData,existing=True)
+                self.fillTree('copy of ' + item.tdline[0].get_label(),ttdData)
             else:
-                pass 
+                item.tdData.tdData[:,0]=item.tdline[0].get_xdata()
+                item.tdData.tdData[:,1]=item.tdline[1].get_ydata()
+                
         else:
             for row in range(self.ui.fileTree.topLevelItemCount()):
                 if where==1 or self.ui.fileTree.topLevelItem(row).checkState(0):
@@ -311,6 +317,7 @@ class MyWindow(QtGui.QMainWindow):
         if myformatdialog.exec_()==QtGui.QDialog.Rejected:
             return
         fileformat=myformatdialog.getDataFormat()
+        print(fileformat)
         if myformatdialog.doAveraging():
             display_filename=path.split(str(filenames[0]))[1]
             for i in range(1,len(filenames)):
@@ -322,11 +329,10 @@ class MyWindow(QtGui.QMainWindow):
                 tdData=TeraData.THzTdData([fn],fileformat)
                 x=self.fillTree(path.split(str(fn))[1],tdData)
         self.ui.mainStatus.clearMessage()
-        
         return filenames
         
     def fillTree(self,display_filename,tdData):
-            
+        print('fillit')
         x=THzTreeWidgetItem()
         x.refreshCanvas=self.refreshCanvas
         x.setFlags(x.flags() | QtCore.Qt.ItemIsEditable)
