@@ -1,8 +1,274 @@
-import pylab as py
+import numpy as np
 from scipy.interpolate import interp1d
 import scipy.signal as signal
-import sys
 from uncertainties import unumpy
+
+class TData():
+    #a simple data class for tera
+
+    def importFile(filename,fileformat):
+        try:
+            #if no Y_col is specified            
+            if 'Y_col' in params:
+                #import it right away
+                if params['dec_sep']=='.':
+                    data=np.loadtxt(filename,
+                                usecols=(params['time_col'],
+                                         params['X_col'],
+                                         params['Y_col']),
+                                skiprows=params['skiprows'])
+                                
+                elif params['dec_sep']==',':
+                    #if the decimal separator is , do a replacement
+                    str2float=lambda val: float(val.replace(',','.'))
+                    data=np.loadtxt(filename,
+                                converters={params['time_col']:str2float,
+                                            params['X_col']:str2float,
+                                            params['Y_col']:str2float},
+                                usecols=(params['time_col'],
+                                         params['X_col'],
+                                         params['Y_col']),
+                                skiprows=params['skiprows'])
+                timeaxis=data[:,0]
+                Efield=TData._rotateToXChannel(data[:,1],data[:,2])
+            else:
+                #import it right away
+                if params['dec_sep']=='.':
+                    data=np.loadtxt(filename,
+                                usecols=(params['time_col'],
+                                         params['X_col']),
+                                skiprows=params['skiprows'])
+                                
+                elif params['dec_sep']==',':
+                    #if the decimal separator is , do a replacement
+                    str2float=lambda val: float(val.replace(',','.'))
+                    data=np.loadtxt(filename,
+                                converters={params['time_col']:str2float,
+                                            params['X_col']:str2float},
+                                usecols=(params['time_col'],
+                                         params['X_col']),
+                                skiprows=params['skiprows'])
+                timeaxis=data[:,0]
+                Efield=data[:,1]
+        except IOError:
+            print("File " + filename + " could not be loaded")
+
+        #scale the timaaxis
+        timeaxis*=params['time_factor']
+        
+        #if the measurement was taken in negative time direction, flip the data
+        if timeaxis[1]-timeaxis[0]<0:
+            timeaxis=timeaxis[::-1]
+            Efield=Efield[::-1]
+     
+        return TData(timeaxis,Efield)
+    
+        
+    def _rotateToXChannel(XChannel,YChannel):
+        #this function should remove all signal from Y-Channel
+        #determine the phase difference from X and Y channel (at maximum signal)
+        
+        ix_max=np.argmax(XChannel)
+        #take 9 datapoints to evaluate theta
+        no=4
+        XCs=XChannel[max(0,ix_max-no):min(len(XChannel),ix_max+no)]
+        YCs=YChannel[max(0,ix_max-no):min(len(YChannel),ix_max+no)]
+        phase=np.arctan(np.mean(YCs/XCs))
+
+        #rotate to XChannel
+        XC_new=XChannel*np.cos(phase)+YChannel*np.sin(phase)
+        #YC_new=-XC*.sin(phase)+YC*py.cos(phase)
+        return XC_new
+    
+    def __init__(self,timeaxis,efield,uncertainty=None):
+        
+        if uncertainty is not None:
+            self.tdData=np.column_stack((timeaxis,efield,uncertainty))
+        else:
+            uncertainty=self.calculateunc(timeaxis,efield)
+            self.tdData=np.column_stack((timeaxis,efield,uncertainty))
+
+    def calculateunc(self,timeaxis,efield):
+        return np.zeros(efield.shape)
+        
+    def _bringToCommonTimeAxis(self,tdDatas,force=True):
+        #What can happen: 
+        #a) datalengthes are not equal due to missing datapoints 
+        #   => no equal frequency bins
+        #b) time positions might not be equal
+            
+        miss_points_max=10    
+        #check for missing datapoints, allowing 
+        #not more than miss_points_max points to miss 
+        all_lengthes=[]
+        for thisdata in tdDatas:
+            all_lengthes.append(thisdata.getSamplingPoints())
+        
+        #do it always, just print a warning, if miss_points_max is exceeded
+        if min(all_lengthes)!=max(all_lengthes):
+            print("Datalength of suceeding measurements not consistent, try to fix")
+            if force==False:
+                return 0
+            if max(all_lengthes)-min(all_lengthes)>miss_points_max:
+                print("Warning: Data seems to be corrupted. \n" +\
+                "The length of acquired data of repeated measurements differs by \n" + \
+                    str(max(all_lengthes)-min(all_lengthes)) + ' datapoints')
+                return 0
+        #interpolation does no harm, even if everything is consistent (no interpolation in this case)
+        commonMIN=max([thistdData[:,0].min() for thistdData in tdDatas])
+        commonMAX=min([thistdData[:,0].max() for thistdData in tdDatas])
+        commonLENGTH=min([thistdData[:,0].shape[0] for thistdData in tdDatas])
+        
+        #interpolate the data
+        for i in range(self.numberOfDataSets):
+            tdDatas[i]=self.getInterData(tdDatas[i],commonLENGTH,commonMIN,commonMAX)
+        
+        return py.asarray(tdDatas)
+
+    def getSamplingPoints(self):    
+        return self.tdData.shape[0]
+
+    def merge(self,tDatas,force=True):
+        tDatas=self._bringToCommonTimeAxis(tdDatas.append(self.tdData),force=True)
+        meantdData=py.average(tdDatas[:,:,1:2],axis=0)
+        #use error propagation formula
+#        noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
+        if tdDatas.shape[0]==1:
+            rep = py.zeros((len(tdDatas[0,:,0]),2))
+        else:
+            rep = py.std(tdDatas[:,:,1:3],axis=0, ddof=1)/py.sqrt(self.numberOfDataSets)
+        unc = rep
+        #unc=py.sqrt(1.0/sumofweights)
+        #time axis are all equal
+        return py.column_stack((tdDatas[0][:,0],meantdData,unc))           
+        
+            
+        
+        
+
+
+class THzTDDataImporter():
+    
+    def __init__(self,filename,foptions):
+        '''this class is a thzTDData Importer:
+        preprocessing steps can be carried out
+        getTimeAxis returns the common time axis of the tdData
+        getMeasurement returns measured thz transient (after preprocessing)
+        '''         
+        #_thzdata_raw are the imported raw datas, without preprocessing, can differ in length
+        self._thzdata_raw=[]
+        self.numberOfDataSets=len(filename)
+        for fname in filename:
+                self._thzdata_raw.append(self.importfile(fname,foptions))
+
+        processedData=self._processRawData(self._thzdata_raw)
+        #calculate the mean
+        meanData=self.calcTDData(processedData)
+       
+       
+       
+    def getInterData(self,tdData,desiredLength,mint,maxt,tkind='linear'):
+        #use cubic interpolation only, if you know, that the data is not too no
+        intpdata=interp1d(tdData[:,0],tdData[:,1:],axis=0,kind=tkind)
+        timeaxis=py.linspace(mint,maxt,desiredLength)
+        longerData=intpdata(timeaxis)
+        return py.column_stack((timeaxis,longerData))
+                 
+    def calcTDData(self,tdDatas):
+        #tdDatas is a a 3d array of measurements, along with their uncertainties
+        #meantdData is the weighted sum of the different measurements
+        #meantdData,sumofweights=py.average(tdDatas[:,:,1:3],axis=0,weights=1.0/tdDatas[:,:,3:]**2,returned=True)
+        
+    def _processRawData(self,rawdatas):
+        tempTDDatas=[]
+        for tdData in rawdatas:
+            #this rotates all signal to X, adds X and Y uncertainty to each
+            t=self._rotateToXChannel(tdData)
+            #this removes Linear Drifts in X-Channel
+            t=self._removeLinearDrift(t)
+            
+            tempTDDatas.append(t)
+
+        #before interpolating to a common time axis, this need to be a list of 
+        #tdData arrays, since they might differ in length
+        
+        #first shift maxima on top, than interpolate, doesn't affect unc array
+        tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
+        #also uncertainty is interpolated
+        tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
+        return tempTDDatas
+
+    def _removeLinearDrift(self,tdData):
+        #do this for x and y channel?
+        #overthink use of detrend here!
+        tdData[:,1:3]=signal.detrend(tdData[:,1:3],axis=0)
+        #take care in unsymmetric pulses: (hard 20 ?!)
+#        tdData[:,1:3]=tdData[:,1:3]-py.mean(tdData[:20,1:3])
+        return tdData
+    
+    def _removeTimeShift(self,tdDatas):
+        #not sure if needed, maybe we want to correct the rawdata by shifting the maxima on top of each other
+        #the indices of the maxima        
+        #takes at the moment only the X Channel data and corrects it (safer!)
+        peak_pos=[]
+        for tdData in tdDatas:
+            time_max_raw=tdData[py.argmax(tdData[:,1]),0]
+            thisPeakData=self.getShorterData(tdData,time_max_raw-0.5e-12,time_max_raw+0.5e-12)
+            thisPeakData=self.getInterData(thisPeakData,len(thisPeakData[:,0])*20,thisPeakData[0,0],thisPeakData[-1,0],'cubic')
+            peak_pos.append(thisPeakData[py.argmax(thisPeakData[:,1]),0])
+        
+        peak_pos=py.asarray(peak_pos)
+        mp=py.mean(peak_pos)
+        for i in range(len(tdDatas)):
+            tdDatas[i][:,0]-=(peak_pos[i]-mp)
+        return tdDatas,py.std(peak_pos)
+
+    
+    def getelnNoise(self,tdData):
+        #returns the uncertainty due to electronic noise
+        
+        #signal preceeding the pulse (X and Y channel)  
+        precNoise=self.getPreceedingNoise(tdData)
+        #is this normalization really correct?!
+        elnNoise = py.std(precNoise, ddof = 1,axis=0)/py.sqrt(precNoise.shape[0])
+        return elnNoise
+
+    def getPreceedingNoise(self,tdData,timePreceedingSignal=-1):
+        #retruns the preceeding noise in X and Y channel of tdData
+        #it uses timePreceedingSignal to evaluate the noise, if not given,
+        #it autodetects a "good" time
+        
+        #we should crop the data at least 2.5 ps before the main peak
+        nearestdistancetopeak=2.5e-12
+        if min(tdData[:,0])+timePreceedingSignal>-nearestdistancetopeak:
+            timePreceedingSignal=-min(tdData[:,0])-nearestdistancetopeak
+            print("Time Interval of preceeding noise to long, reset done")
+            #dont use user input if higher than peak
+        
+        #get the first time
+        starttime=min(tdData[:,0])
+        if timePreceedingSignal<0:
+            #determine length automatically            
+            ratio=2
+            ix_max=py.argmax(tdData[:,1])
+            ix_min=py.argmin(tdData[:,1])
+            earlier=min(ix_max,ix_min)
+                #take only the first nts part            
+            endtime=tdData[int(earlier/ratio),0]
+        else:
+            endtime=starttime+timePreceedingSignal
+
+        #cut the data from starttime to endtime            
+        noise=self.getShorterData(tdData,starttime,endtime)
+        #detrend the noise
+        noise=signal.detrend(noise[:,1:3],axis=0)
+        return noise
+
+    def getShorterData(self,tdData,tmin,tmax):
+        #cuts tdData from time tmin to time tmax
+        ix=py.all([tdData[:,0]>=tmin,tdData[:,0]<tmax],axis=0)
+        return tdData[ix,:]
+    
 
 class THzTdData():
 
@@ -14,7 +280,6 @@ class THzTdData():
         2) create TDData Object from existing TDData Object by passing 'existing'
         '''
         #_thzdata_raw is an array of measurments,dim=3, for each measurement
-        # an array t,X,Y is stored
         self._thzdata_raw=[]
         #two different constructors: 
         if not 'existing' in kwargs:
@@ -123,14 +388,6 @@ class THzTdData():
         noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
         return Emax/noise
     
-    def getelnNoise(self,tdData):
-        #returns the uncertainty due to electronic noise
-        
-        #signal preceeding the pulse (X and Y channel)  
-        precNoise=self.getPreceedingNoise(tdData)
-        #is this normalization really correct?!
-        elnNoise = py.std(precNoise, ddof = 1,axis=0)/py.sqrt(precNoise.shape[0])
-        return elnNoise
        
     def getEX(self):
         #returns the mean X Channel
@@ -156,13 +413,7 @@ class THzTdData():
         tmax=tcenter+after
         return self.getShorterData(self.tdData,self.getTimes()[0],tmax)
         
-    def getInterData(self,tdData,desiredLength,mint,maxt,tkind='linear'):
-        #use cubic interpolation only, if you know, that the data is not too no
-        intpdata=interp1d(tdData[:,0],tdData[:,1:],axis=0,kind=tkind)
-        timeaxis=py.linspace(mint,maxt,desiredLength)
-        longerData=intpdata(timeaxis)
-        return py.column_stack((timeaxis,longerData))
-
+    
     def getLength(self):
         #returns the length of the tdData array
         return len(self.getTimes())
@@ -174,36 +425,6 @@ class THzTdData():
     def getPeakWidth(self):
         return 0
         
-    def getPreceedingNoise(self,tdData,timePreceedingSignal=-1):
-        #retruns the preceeding noise in X and Y channel of tdData
-        #it uses timePreceedingSignal to evaluate the noise, if not given,
-        #it autodetects a "good" time
-        
-        #we should crop the data at least 2.5 ps before the main peak
-        nearestdistancetopeak=2.5e-12
-        if min(tdData[:,0])+timePreceedingSignal>-nearestdistancetopeak:
-            timePreceedingSignal=-min(tdData[:,0])-nearestdistancetopeak
-            print("Time Interval of preceeding noise to long, reset done")
-            #dont use user input if higher than peak
-        
-        #get the first time
-        starttime=min(tdData[:,0])
-        if timePreceedingSignal<0:
-            #determine length automatically            
-            ratio=2
-            ix_max=py.argmax(tdData[:,1])
-            ix_min=py.argmin(tdData[:,1])
-            earlier=min(ix_max,ix_min)
-                #take only the first nts part            
-            endtime=tdData[int(earlier/ratio),0]
-        else:
-            endtime=starttime+timePreceedingSignal
-
-        #cut the data from starttime to endtime            
-        noise=self.getShorterData(tdData,starttime,endtime)
-        #detrend the noise
-        noise=signal.detrend(noise[:,1:3],axis=0)
-        return noise
 
     def getSNR(self):
         #returns the SNR
@@ -254,82 +475,8 @@ class THzTdData():
     def setEFieldData(edata):
         pass
     
-    def importfile(self,fname,params):
-        # if even more sophisticated things are needed, just inherit THzTdData class
-        #and override the importfile method
-        #try to load the file with name fname
-        #it should be possible to write this shorter
-        try:
-            #if no Y_col is specified            
-            if 'Y_col' in params:
-                #import it right away
-                if params['dec_sep']=='.':
-                    data=py.loadtxt(fname,
-                                usecols=(params['time_col'],
-                                         params['X_col'],
-                                         params['Y_col']),
-                                skiprows=params['skiprows'])
-                                
-                elif params['dec_sep']==',':
-                    #if the decimal separator is , do a replacement
-                    str2float=lambda val: float(val.replace(',','.'))
-                    data=py.loadtxt(fname,
-                                converters={params['time_col']:str2float,
-                                            params['X_col']:str2float,
-                                            params['Y_col']:str2float},
-                                usecols=(params['time_col'],
-                                         params['X_col'],
-                                         params['Y_col']),
-                                skiprows=params['skiprows'])                
-            else:
-                #import it right away
-                if params['dec_sep']=='.':
-                    data=py.loadtxt(fname,
-                                usecols=(params['time_col'],
-                                         params['X_col']),
-                                skiprows=params['skiprows'])
-                                
-                elif params['dec_sep']==',':
-                    #if the decimal separator is , do a replacement
-                    str2float=lambda val: float(val.replace(',','.'))
-                    data=py.loadtxt(fname,
-                                converters={params['time_col']:str2float,
-                                            params['X_col']:str2float},
-                                usecols=(params['time_col'],
-                                         params['X_col']),
-                                skiprows=params['skiprows'])
-                dummy_Y=py.zeros((data.shape[0],1))
-                data=py.column_stack((data,dummy_Y))
-        except IOError:
-            print("File " + fname + " could not be loaded")
-            sys.exit()
-
-        #scale the timaaxis
-        data[:,0]*=params['time_factor']
-        
-        #if the measurement was taken in negative time direction, flip the data
-        if data[1,0]-data[0,0]<0:
-            data=py.flipud(data)
-     
-        return data
     
-    def resetTDData(self):
-        #recalculate the mean tdData
-        #do some data preprocessing of the rawdata
-        processedData=self._processRawData(self._thzdata_raw)
-        #calculate the mean
-        meanData=self.calcTDData(processedData)
-        #set the tdData to the calculated meanData
-        self.setTDData(meanData)
- 
-    def setTDData(self,tdData):
-        #set the tdData, use this function! 
-        self.tdData=tdData
-        #we lost some steps,this is why the mean occurs, maybe snd line is better?
-        self.dt=abs(py.mean(tdData[10:20,0]-tdData[9:19,0]))       
-#        self.dt=(tdData[-1,0]-tdData[0,0])/len(tdData[:,0])
-        self.num_points=len(tdData[:,0])
-
+   
     def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
         #zero padds the time domain data, it is possible to padd at the beginning,
         #or at the end, and further gaussian or real zero padding is possible        
@@ -360,112 +507,7 @@ class THzTdData():
             
         self.setTDData(longvec)
         
-    def _bringToCommonTimeAxis(self,tdDatas):
-        #What can happen: 
-        #a) datalengthes are not equal due to missing datapoints 
-        #   => no equal frequency bins
-        #b) time positions might not be equal
-            
-        miss_points_max=10    
-        #check for missing datapoints, allowing 
-        #not more than miss_points_max points to miss 
-        all_lengthes=[]
-        for thisdata in tdDatas:
-            all_lengthes.append(len(thisdata[:,0]))
-        
-        #do it always, just print a warning, if miss_points_max is exceeded
-        if min(all_lengthes)!=max(all_lengthes):
-            print("Datalength of suceeding measurements not consistent, try to fix")
-            if max(all_lengthes)-min(all_lengthes)>miss_points_max:
-                print("Warning: Data seems to be corrupted. \n" +\
-                "The length of acquired data of repeated measurements differs by \n" + \
-                    str(max(all_lengthes)-min(all_lengthes)) + ' datapoints')
-        
-        #interpolation does no harm, even if everything is consistent (no interpolation in this case)
-        commonMIN=max([thistdData[:,0].min() for thistdData in tdDatas])
-        commonMAX=min([thistdData[:,0].max() for thistdData in tdDatas])
-        commonLENGTH=min([thistdData[:,0].shape[0] for thistdData in tdDatas])
-        
-        #interpolate the data
-        for i in range(self.numberOfDataSets):
-            tdDatas[i]=self.getInterData(tdDatas[i],commonLENGTH,commonMIN,commonMAX)
-        
-        return py.asarray(tdDatas)
-    
-    def _determineLockinPhase(self,rawtdData):
-        #determine the phase difference from X and Y channel (at maximum signal)
-        
-        ix_max=py.argmax(rawtdData[:,1])
-        #take 9 datapoints to evaluate theta
-        no=4
-        XCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),1]
-        YCs=rawtdData[max(0,ix_max-no):min(rawtdData.shape[0],ix_max+no),2]
-        return py.arctan(py.mean(YCs/XCs))
-    
-    def _processRawData(self,tdDatas):
-        tempTDDatas=[]
-        for tdData in tdDatas:
-            #this rotates all signal to X, adds X and Y uncertainty to each
-            #tdData
-            t=self._rotateToXChannel(tdData)
-            #this removes Linear Drifts in X-Channel
-            t=self._removeLinearDrift(t)
-            
-            tempTDDatas.append(t)
 
-        #before interpolating to a common time axis, this need to be a list of 
-        #tdData arrays, since they might differ in length
-        
-        #first shift maxima on top, than interpolate, doesn't affect unc array
-        tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
-        #also uncertainty is interpolated
-        tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
-        return tempTDDatas
-
-    def _removeLinearDrift(self,tdData):
-        #do this for x and y channel?
-        #overthink use of detrend here!
-        tdData[:,1:3]=signal.detrend(tdData[:,1:3],axis=0)
-        #take care in unsymmetric pulses: (hard 20 ?!)
-#        tdData[:,1:3]=tdData[:,1:3]-py.mean(tdData[:20,1:3])
-        return tdData
-    
-    def _removeTimeShift(self,tdDatas):
-        #not sure if needed, maybe we want to correct the rawdata by shifting the maxima on top of each other
-        #the indices of the maxima        
-        #takes at the moment only the X Channel data and corrects it (safer!)
-        peak_pos=[]
-        for tdData in tdDatas:
-            time_max_raw=tdData[py.argmax(tdData[:,1]),0]
-            thisPeakData=self.getShorterData(tdData,time_max_raw-0.5e-12,time_max_raw+0.5e-12)
-            thisPeakData=self.getInterData(thisPeakData,len(thisPeakData[:,0])*20,thisPeakData[0,0],thisPeakData[-1,0],'cubic')
-            peak_pos.append(thisPeakData[py.argmax(thisPeakData[:,1]),0])
-        
-        peak_pos=py.asarray(peak_pos)
-        mp=py.mean(peak_pos)
-        for i in range(len(tdDatas)):
-            tdDatas[i][:,0]-=(peak_pos[i]-mp)
-        return tdDatas,py.std(peak_pos)
-
-    def _rotateToXChannel(self,tdData):
-        #this function should remove all signal from Y-Channel
-        
-        #Calculate lock-in phase:
-        unc_raw=self.getelnNoise(tdData)
-        XC=unumpy.uarray(tdData[:,1],unc_raw[0])
-        YC=unumpy.uarray(tdData[:,2],unc_raw[1])
-        #go to pulse:
-        phase=self._determineLockinPhase(tdData)
-        
-        #rotate to XChannel
-        XC_new=XC*py.cos(phase)+YC*py.sin(phase)
-        YC_new=-XC*py.sin(phase)+YC*py.cos(phase)
-        tdData[:,1]=unumpy.nominal_values(XC_new)
-        tdData[:,2]=unumpy.nominal_values(YC_new)
-        
-        unc_new=py.column_stack((unumpy.std_devs(XC_new),unumpy.std_devs(YC_new)))
-        tdData=py.column_stack((tdData,unc_new))
-        return tdData
 
         
 class ImportMarburgData(THzTdData):
@@ -875,4 +917,4 @@ if __name__=="__main__":
             'Y_col':2,
             'dec_sep':'.',
             'skiprows':0}
-    data=THzTdData(['artificialdata-2.txt'],params)
+    data=TData.importFile('artificialdata-2.txt',params)

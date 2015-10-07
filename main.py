@@ -42,8 +42,7 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.preferences.hide()
         #this is the first combobox of this type, but i will use it at several places again
         self.cbwhichGraphsModel=self.ui.cbwhichGraphs.model()
-        print(self.cbwhichGraphsModel.columnCount())
-#        self.ui.cbwhichGraphs.setModel()
+        self.ui.cbwhichGraphs.setModel(self.cbwhichGraphsModel)
         
         #Actions in Spectrum analysis
         self.ui.pbApplyTDManiuplation.clicked.connect(self.applyTDManipulation)        
