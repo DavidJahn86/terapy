@@ -133,7 +133,7 @@ class TimeDomainData():
         efields=[tdd.getEfield() for tdd in timeDomainDatas]
         av=np.average(efields,axis=0)
         std=np.std(efields,axis=0,ddof=1)/np.sqrt(len(timeDomainDatas))
-        return TimeDomainData(timeaxisarray[0],av,std)
+        return TimeDomainData(timeaxisarray[0],av,std) 
             
     def _bringToCommonTimeAxis(timeDomainDatas,force=True):
         #What can happen: 
@@ -190,8 +190,32 @@ class TimeDomainData():
             shiftedDatas.append(TimeDomainData(newTimeAxis,tdd.getEfield(),tdd.getUncertainty(),tdd.getDataSetName()))
         
         return shiftedDatas
-    
-    def __init__(self,timeaxis,efield,uncertainty=None,datasetname=''):
+        
+    def _preProcessData(timeDomainDatas,average=True,removeTimeShift=True,removeDrift=True):
+        '''This function should preprocess the timeDomainData
+        * averages the data if average=True, else returns a list of timeDomainDatas
+        * removes a peak Time Shift, if removeTimeShift=True is set, else no TimeAxis correction
+        * removes constant and linear Drift in measured current if removeDrift=True
+        '''
+        
+        tempTDDatas=timeDomainDatas
+        
+        if removeDrift:
+            tempTDDatas=[]
+            for tdd in timeDomainDatas:
+                #this removes Linear Drifts in X-Channel
+                tempTDDatas.append(tdd._removeLinearDrift())
+        
+        if removeTimeShift:
+            #first shift maxima on top, than interpolate, doesn't affect unc array
+            tempTDDatas=TimeDomainData._removeTimeShift(tempTDDatas)
+        
+        if average:
+            tempTDDatas=TimeDomainData.averageTimeDomainDatas(tempTDDatas)
+        
+        return tempTDDatas
+        
+    def __init__(self,timeaxis,efield,uncertainty=None,datasetname='',N_samples=1):
         
         self.timeaxis=np.copy(timeaxis)
         if uncertainty is None:
@@ -199,53 +223,32 @@ class TimeDomainData():
                     
         self.uefield=unumpy.uarray(efield,uncertainty)
         self.datasetname=datasetname
+        self.N_samples=N_samples
+
+    def getDataSetName(self):
+        return self.datasetname
+
+    def getDynamicRange(self):
+        #returns the dynamic range
+        Emax=max(self.getEfield())
+        noise=self.getSigmaBG()
+        return Emax/noise
         
     def getEfield(self):
         return unumpy.nominal_values(self.uefield)
+
+    def getFirstPuls(self,after=5e-12):
+        '''returns only the first pulse'''
         
-    def getUncertainty(self):
-        return unumpy.std_devs(self.uefield)
+        #finds the main peak
+        tcenter=self.getPeakPosition()
+        #without argument, assume width of the pulse to be not more than 10ps!
+        #further crop always from the beginning of the time data, 
+        #in order to avoid phase problems
+        tmax=tcenter+after
+        tmin=min(self.getTimeAxisRef())
         
-    def getSigmaBG(self):
-        return TimeDomainData.estimateBGNoise(self.timeaxis,unumpy.nominal_values(self.uefield))
-        
-    def getSigmaRepeatability(self):
-        pass
-    
-    def getTimeAxis(self):
-        return np.copy(self.timeaxis)
-        
-    def getTimeAxisRef(self):
-        return self.timeaxis
-        
-    def getUEfield(self):
-        return np.copy(self.uefield)
-        
-    def getUEfieldRef(self):
-        return self.uefield
-    
-    def getDataSetName(self):
-        return self.datasetname
-        
-    def getSamplingPoints(self):    
-        return self.getTimeAxisRef().shape[0]
-  
-    def getPeakPosition(self):
-        '''gives the time, at which the signal is maximal'''
-        return self.getTimeAxisRef()[np.argmax(self.getEfield())]
-  
-    def getTimeSlice(self,tmin,tmax):
-        newtaxis=self.getTimeAxis()
-        ix=np.all([newtaxis>=tmin,newtaxis<tmax],axis=0)
-        return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.datasetname)
-    
-    def _removeLinearDrift(self):
-        '''Removes a linear drift from the measurement data
-        So far no uncertainty propagation ?
-        '''
-        newfield=signal.detrend(unumpy.nominal_values(self.uefield))
-            
-        return TimeDomainData(self.getTimeAxisRef(),newfield,self.getUncertainty(),self.getDataSetName())
+        return self.getTimeSlice(tmin,tmax)
 
     def getInterpolatedTimeDomainData(self,desiredLength,mint,maxt,tkind='linear'):
         #use cubic interpolation only, if you know, that the data is not too no
@@ -253,183 +256,83 @@ class TimeDomainData():
         timeaxis=np.linspace(mint,maxt,desiredLength)
         longerData=intpdata(timeaxis)
         return TimeDomainData(timeaxis,longerData[0,:],longerData[1,:],self.getDataSetName())
+
+    def getPeakPosition(self):
+        '''gives the time, at which the signal is maximal'''
+        return self.getTimeAxisRef()[np.argmax(self.getEfield())]
+
+    def getPeakWidth(self):
+        return 0
+
+    def getSamplingPoints(self):    
+        return self.getTimeAxisRef().shape[0]
+  
+    def getSigmaBG(self):
+        return TimeDomainData.estimateBGNoise(self.timeaxis,unumpy.nominal_values(self.uefield))
+
+    def getSigmaRepeatability(self):
+        pass
+
+    def getSNR(self):
+        #returns the SNR
+        return abs(self.getEfield())/self.getUncertainty()
+
+    def getTimeAxis(self):
+        return np.copy(self.timeaxis)
+        
+    def getTimeAxisRef(self):
+        return self.timeaxis
+
+    def getTimeSlice(self,tmin,tmax):
+        newtaxis=self.getTimeAxis()
+        ix=np.all([newtaxis>=tmin,newtaxis<tmax],axis=0)
+        return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.datasetname)
+
+    def getTimeWindowLength(self):
+        #returns thetime from the signal peak to the end of the measurement
+        peak=self.getPeakPosition()
+        return abs(self.getTimeAxisRef()[-1]-peak)
+        
+    def getUEfield(self):
+        return np.copy(self.uefield)
+        
+    def getUEfieldRef(self):
+        return self.uefield
+
+    def getUncertainty(self):
+        return unumpy.std_devs(self.uefield)
+    
+    def getWindowedData(self,windowlength_time=-1,windowtype='blackman'):
+        '''windowlength_time sets the time of rising and falling of the window before 1 is reached, a negative time means no flat top
+        windowtype sets the type of window, currently only blackman window available
+        '''
+        #returns the blackmanwindowed tdData
+        if windowlength_time>0:
+            N=int(windowlength_time/self.dt)
+            w=np.blackman(N*2)
+            w=np.hstack((w[:N],np.ones((self.getSamplingPoints()-N*2),),w[N:]))
+        else:
+            w=np.blackman(self.getSamplingPoints())
+        
+        windowedData=self.getUEfield()
+        windowedData*=w
+            
+        return TimeDomainData(self.getTimeAxisRef(),unumpy.nominal_values(windowedData),unumpy.std_devs(windowedData),datasetname=self.getDataSetName(),self.get
+        
+    def _removeLinearDrift(self):
+        '''Removes a linear drift from the measurement data
+        So far no uncertainty propagation ?
+        '''
+        newfield=signal.detrend(unumpy.nominal_values(self.uefield))
+            
+        return TimeDomainData(self.getTimeAxisRef(),newfield,self.getUncertainty(),self.getDataSetName())
   
     def plotme(self):
         '''only for testing'''
         plt.plot(self.getTimeAxisRef(),self.getEfield())
         
-    
-#       
-#       
-#                 
-#    def _processRawData(self,rawdatas):
-#        tempTDDatas=[]
-#        for tdData in rawdatas:
-#            #this rotates all signal to X, adds X and Y uncertainty to each
-#            t=self._rotateToXChannel(tdData)
-#            #this removes Linear Drifts in X-Channel
-#            t=self._removeLinearDrift(t)
-#            
-#            tempTDDatas.append(t)
+   
 #
-#        #before interpolating to a common time axis, this need to be a list of 
-#        #tdData arrays, since they might differ in length
-#        
-#        #first shift maxima on top, than interpolate, doesn't affect unc array
-#        tempTDDatas,time_jitter=self._removeTimeShift(tempTDDatas)
-#        #also uncertainty is interpolated
-#        tempTDDatas=self._bringToCommonTimeAxis(tempTDDatas)
-#        return tempTDDatas
-#
-#    def calcTDData(self,tdDatas):
-#        #tdDatas is a a 3d array of measurements, along with their uncertainties
-#        #meantdData is the weighted sum of the different measurements
-#        #meantdData,sumofweights=py.average(tdDatas[:,:,1:3],axis=0,weights=1.0/tdDatas[:,:,3:]**2,returned=True)
-#        meantdData=py.average(tdDatas[:,:,1:3],axis=0)
-#        #use error propagation formula
-#        noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
-#        if tdDatas.shape[0]==1:
-#            rep = py.zeros((len(tdDatas[0,:,0]),2))
-#        else:
-#            rep = py.std(tdDatas[:,:,1:3],axis=0, ddof=1)/py.sqrt(self.numberOfDataSets)
-#        unc = py.sqrt(rep**2+noise**2)
-#        #unc=py.sqrt(1.0/sumofweights)
-#        #time axis are all equal
-#        return py.column_stack((tdDatas[0][:,0],meantdData,unc))       
-#    
-#    def calcunc(self,tdDatas):
-#        #not used anymore, older version, should we remove it???
-#         #tdDatas is a np array of tdData measurements
-#        if tdDatas.shape[0]==1:
-#            repeatability=py.zeros((len(tdDatas[0,:,0]),2))
-#        else:
-#            repeatability=py.std(py.asarray(tdDatas[:,:,1:3]),axis=0, ddof = 1)/py.sqrt(self.numberOfDataSets)
-#        #this line is wrong
-#        elnNoise=tdDatas[0,:,3:]
-#        uncarray = py.sqrt(repeatability**2 + elnNoise**2)
-#        
-#        return uncarray
-#    
-#    def doTdPlot(self,name='TD-Plot'):
-#        #plots the X and Y channel of the processed Data
-#        py.figure(name)
-#        py.plot(self.getTimesPs(),self.getEX())      
-#        py.plot(self.getTimesPs(),self.getEY())      
-#        py.xlabel('Time in ps')
-#        py.ylabel('Amplitude, arb. units')
-#        
-#    def doPlotWithunc(self,no_std=2):
-#        #plots the X and the Y channel of the processed measurements, along
-#        #with its uncertainties
-#        self.doTdPlot('TD-UNC-Plot')
-#        py.plot(self.getTimesPs(),self.getEX()+no_std*self.getUncEX(),'g--')
-#        py.plot(self.getTimesPs(),self.getEX()-no_std*self.getUncEX(),'g--')
-#        py.plot(self.getTimesPs(),self.getEY()+no_std*self.getUncEY(),'g--')
-#        py.plot(self.getTimesPs(),self.getEY()-no_std*self.getUncEY(),'g--')    
-#    
-#    def getAllPrecNoise(self,timePreceedingSignal=-1):
-#        #returns the concatenated Preceeding Noise
-#        precNoise=py.array([])
-#        for tdData in self._thzdata_raw:
-#            tN=self.getPreceedingNoise(tdData,timePreceedingSignal)
-#            if precNoise.shape[0]==0:
-#                precNoise=tN
-#            else:
-#                precNoise=py.vstack((precNoise,tN))
-#        return precNoise
-#    
-#    def getDR(self):
-#        #returns the dynamic range
-#        Emax=abs(self.getEX())
-#        noise=py.sqrt(py.mean(self.getAllPrecNoise()[0]**2))
-#        return Emax/noise
-#    
-#       
-#    def getEX(self):
-#        #returns the mean X Channel
-#        return self.tdData[:,1]
-#        
-#    def getEY(self):
-#        #returns the mean Y Channel        
-#        return self.tdData[:,2]
-#
-#    def getfilename(self):
-#        #returns the list of filenames, from which the data was loaded
-#        return self.filename
-#        
-#    def getFirstPuls(self,after=5e-12):
-#        #returns only the first pulse         
-#        
-#        #finds the main peak
-#        tcenter=self.getPeakPosition()
-#        #without argument, assume width of the pulse to be not more than 10ps!
-#        #further crop always from the beginning of the time data, 
-#        #in order to avoid phase problems
-#        
-#        tmax=tcenter+after
-#        return self.getShorterData(self.tdData,self.getTimes()[0],tmax)
-#        
-#    
-#    def getLength(self):
-#        #returns the length of the tdData array
-#        return len(self.getTimes())
-#
-#    
-#    def getPeakWidth(self):
-#        return 0
-#        
-#
-#    def getSNR(self):
-#        #returns the SNR
-#        return abs(self.getEX())/self.getUncEX()
-#
-#    def getShorterData(self,tdData,tmin,tmax):
-#        #cuts tdData from time tmin to time tmax
-#        ix=py.all([tdData[:,0]>=tmin,tdData[:,0]<tmax],axis=0)
-#        return tdData[ix,:]
-#    
-#    def getTimes(self):
-#        #returns the time colon
-#        return self.tdData[:,0]
-#
-#    def getTimesPs(self):
-#        #returns the time colon in ps
-#        return self.getTimes()*1e12
-#
-#    def getTimeWindowLength(self):
-#        #returns thetime from the signal peak to the end of the measurement
-#        peak=self.getPeakPosition()
-#        return abs(self.tdData[-1,0]-peak)
-#    
-#    def getUncEX(self):
-#        #returns the uncertainty of the X channel
-#        return self.tdData[:,3]
-#    
-#    def getUncEY(self):
-#        #returns the uncertainty of the Y channel
-#        return self.tdData[:,4]
-#    
-#    def getWindowedData(self,windowlength_time=1e-12):
-#        #returns the blackmanwindowed tdData
-#        N=int(windowlength_time/self.dt)
-#        w=py.blackman(N*2)
-#        w=py.hstack((w[0:N],py.ones((self.getLength()-N*2),),w[N:]))
-#        windowedData=self.tdData
-#        #this could be written more elegantly?!
-#        windowedData[:,1]*=w
-#        windowedData[:,2]*=w
-#        windowedData[:,3]*=w
-#        windowedData[:,4]*=w
-#        return windowedData
-#
-#    def setTimeAxis(timeaxis):
-#        pass
-#    
-#    def setEFieldData(edata):
-#        pass
-#    
-#    
-#   
 #    def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
 #        #zero padds the time domain data, it is possible to padd at the beginning,
 #        #or at the end, and further gaussian or real zero padding is possible        
@@ -869,8 +772,8 @@ if __name__=="__main__":
             'X_col':1,
             'Y_col':2,
             'dec_sep':'.',
-            'skiprows':0}
-    files=glob.glob('*.txt')
+            'skiprows':1}
+    files=glob.glob('Reference*.txt')
     datas=[]
     for fn in files:
         datas.append(TimeDomainData.fromFile(fn,params))
