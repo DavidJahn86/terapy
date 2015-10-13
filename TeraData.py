@@ -133,7 +133,11 @@ class TimeDomainData():
         efields=[tdd.getEfield() for tdd in timeDomainDatas]
         av=np.average(efields,axis=0)
         std=np.std(efields,axis=0,ddof=1)/np.sqrt(len(timeDomainDatas))
-        return TimeDomainData(timeaxisarray[0],av,std) 
+        name='average_'
+        for tdd in timeDomainDatas:
+            name+=', ' + tdd.getDataSetName()
+        
+        return TimeDomainData(timeaxisarray[0],av,std,name) 
             
     def _bringToCommonTimeAxis(timeDomainDatas,force=True):
         #What can happen: 
@@ -214,8 +218,17 @@ class TimeDomainData():
             tempTDDatas=TimeDomainData.averageTimeDomainDatas(tempTDDatas)
         
         return tempTDDatas
+            
+    def importMultipleFiles(fns,fileformats):
+        datas=[]
+        for fn in files:
+            datas.append(TimeDomainData.fromFile(fn,params))
+            
+        av_data=TimeDomainData._preProcessData(datas)
         
-    def __init__(self,timeaxis,efield,uncertainty=None,datasetname='',N_samples=1):
+        return av_data
+        
+    def __init__(self,timeaxis,efield,uncertainty=None,datasetname=''):
         
         self.timeaxis=np.copy(timeaxis)
         if uncertainty is None:
@@ -223,7 +236,6 @@ class TimeDomainData():
                     
         self.uefield=unumpy.uarray(efield,uncertainty)
         self.datasetname=datasetname
-        self.N_samples=N_samples
 
     def getDataSetName(self):
         return self.datasetname
@@ -282,11 +294,14 @@ class TimeDomainData():
         
     def getTimeAxisRef(self):
         return self.timeaxis
+    
+    def getTimeStep(self):
+        return self.timeaxis[1]-self.timeaxis[0]
 
     def getTimeSlice(self,tmin,tmax):
         newtaxis=self.getTimeAxis()
         ix=np.all([newtaxis>=tmin,newtaxis<tmax],axis=0)
-        return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.datasetname)
+        return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.getDataSetName())
 
     def getTimeWindowLength(self):
         #returns thetime from the signal peak to the end of the measurement
@@ -308,7 +323,7 @@ class TimeDomainData():
         '''
         #returns the blackmanwindowed tdData
         if windowlength_time>0:
-            N=int(windowlength_time/self.dt)
+            N=int(windowlength_time/self.getTimeStep())
             w=np.blackman(N*2)
             w=np.hstack((w[:N],np.ones((self.getSamplingPoints()-N*2),),w[N:]))
         else:
@@ -317,7 +332,7 @@ class TimeDomainData():
         windowedData=self.getUEfield()
         windowedData*=w
             
-        return TimeDomainData(self.getTimeAxisRef(),unumpy.nominal_values(windowedData),unumpy.std_devs(windowedData),datasetname=self.getDataSetName(),self.get
+        return TimeDomainData(self.getTimeAxisRef(),unumpy.nominal_values(windowedData),unumpy.std_devs(windowedData),datasetname=self.getDataSetName())
         
     def _removeLinearDrift(self):
         '''Removes a linear drift from the measurement data
@@ -331,114 +346,225 @@ class TimeDomainData():
         '''only for testing'''
         plt.plot(self.getTimeAxisRef(),self.getEfield())
         
-   
-#
-#    def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
-#        #zero padds the time domain data, it is possible to padd at the beginning,
-#        #or at the end, and further gaussian or real zero padding is possible        
-#        #might not work for gaussian mode!
-#
-#        desiredLength=int(desiredLength)
-#        #escape the function        
-#        if desiredLength<0:
-#            return 0
-#
-#        #calculate the paddvectors        
-#        if paddmode=='gaussian':
-#            paddvec=py.normal(0,py.std(self.getPreceedingNoise())*0.05,desiredLength)
-#        else:
-#            paddvec=py.ones((desiredLength,self.tdData.shape[1]-1))
-#            paddvec*=py.mean(self.tdData[-20:,1:])
-#            
-#        timevec=self.getTimes()
-#        if where=='end':
-#            #timeaxis:
-#            newtimes=py.linspace(timevec[-1],timevec[-1]+desiredLength*self.dt,desiredLength)
-#            paddvec=py.column_stack((newtimes,paddvec))
-#            longvec=py.row_stack((self.tdData,paddvec))
-#        else:
-#            newtimes=py.linspace(timevec[0]-(desiredLength+1)*self.dt,timevec[0],desiredLength)
-#            paddvec=py.column_stack((newtimes,paddvec))
-#            longvec=py.row_stack((paddvec,self.tdData))
-#            
-#        self.setTDData(longvec)
+    def zeroPaddToTargetFrequencyResolution(self,fbins,paddmode='zero',where='end'):
+        '''as many zeros are added as need to achieve a frequency resolution of fbins'''
+        spac=1/self.getTimeStep()/fbins
+        actlen=self.getSamplingPoints()
+        nozeros=np.ceil(spac-actlen)
+        return self.zeroPaddData(nozeros,paddmode,where)
+        
+    def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
+        '''zero padds the time domain data, it is possible to padd at the beginning,
+        or at the end, and further gaussian or real zero padding is possible        
+        '''
+
+        desiredLength=int(desiredLength)
+        #escape the function        
+        if desiredLength<0:
+            return 0
+
+        #calculate the paddvectors        
+        if paddmode=='gaussian':
+            paddvec=np.random.normal(0,self.getSigmaBG(),desiredLength)
+        else:
+            paddvec=np.zeros((desiredLength,))
+            
+        timevec=self.getTimeAxis()
+        
+        if where=='end':
+            #timeaxis:
+            newtimes=np.linspace(timevec[-1],timevec[-1]+desiredLength*self.getTimeStep(),desiredLength)
+            timevec=np.concatenate((timevec,newtimes))
+            newuefield=np.concatenate((self.getUEfield(),unumpy.uarray(paddvec,self.getSigmaBG())))
+        else:
+            newtimes=np.linspace(timevec[0]-(desiredLength+1)*self.getTimeStep(),timevec[0],desiredLength)
+            timevec=np.concatenate((newtimes,paddvec))
+            newuefield=np.concatenate((unumpy.uarray(paddvec,self.getSigmaBG()),self.getUEfield()))
+        
+        return TimeDomainData(timevec,unumpy.nominal_values(newuefield),unumpy.std_devs(newuefield),self.getDataSetName())
+
+def importMarburgData(filenames):       
+    params={'time_factor':1,
+            'time_col':0,
+            'X_col':1,
+            'Y_col':2,
+            'dec_sep':',',
+            'skiprows':0}
+    TimeDomainData.importMultipleFiles(filenames,params)
+
+def importINRIMData(filenames):
+    params={'time_factor':1,
+            'time_col':2,
+            'X_col':3,
+            'Y_col':5,
+            'dec_sep':'.',
+            'skiprows':0}    
+    TimeDomainData.importMultipleFiles(filenames,params)
+
+
+class FrequencyDomainData():
+    '''
+    A simple class for THz-TDS, it calculates the fft of the measured time domain trace and provides
+    useful functions on the fft
+    * a uncertainty calculation is also carried out
+    '''
+    
+    FMIN=0      #minimal kept frequency
+    FMAX=-1     #maximal kept frequency
+    
+    def fromTimeDomainData(tdd):
+        '''creates a FrequencyDomainData object from a timedomaindata
+        '''
+        N=tdd.getSamplingPoints()
+        frequencies=np.fft.fftfreq(N,tdd.getTimeStep())
+        spectrum=np.fft.fft(tdd.getEfield())
+        phase=np.unwrap(np.angle(spectrum)) #
+        
+        return FrequencyDomainData(frequencies[:N/2],spectrum[:N/2],phase[:N/2])
+        
+    def __init__(self,frequencies,spectrum,phase=None):
+
+        self.frequencies=np.copy(frequencies)
+        self.spectrum=np.copy(spectrum)
+        #the phase should always be kept        
+        if phase is not None:
+            self.phase=np.copy(phase)
+        else:
+            self.phase=np.unwrap(np.angle(self.spectrum))
+    
+    def plotme(self):
+        plt.plot(self.frequencies,20*np.log10(abs(self.spectrum)))
+        
+    def getFrequencies(self):
+        return np.copy(self.frequencies)
+    
+    def getFrequenciesRef(self):
+        return self.frequencies
+        
+    def getSpectrum(self):
+        return np.copy(self.spectrum)
+        
+    def getSpectrumRef(self):
+        return self.spectrum
+        
+    def getPhases(self):
+        return np.copy(self.phase)
+        
+    def getPhasesRef(self):
+        return self.phase     
+        
+    def getfbins(self):
+        #the frequency spacing
+        return abs(self.getFrequenciesRef()[1]-self.getFrequenciesRef()[0])
+
+    def getCroppedData(self,startfreq=FMIN,endfreq=FMAX):
+        #this function returns the array data cropped from startfreq to endfreq
+        ix=np.all([self.getFrequenciesRef()>=startfreq,self.getFrequenciesRef()<=endfreq],axis=0)
+        return FrequencyDomainData(self.getFrequenciesRef()[ix],self.getSpectrumRef()[ix],self.getPhasesRef()[ix])
+
+    def removePhaseOffset(self,startfreq=200e9,endfreq=1e12):
+        '''interpolates the phase linearly inbetween startfreq and endfreq
+        removes afterwards the constant phase shift (zero phase at zero frequency)
+        and returns a new FrequencyDomain instance with the new phase
+        '''
+        #cut phase to reasonable range:
+        cropped_data=self.getCroppedData(startfreq,endfreq)
+        #determine the slope and the offset      
+        p=np.polyfit(cropped_data.getFrequenciesRef(),cropped_data.getPhasesRef(),1)
+        #return full phase-offset(croppedPhase)
+        
+        return FrequencyDomainData(self.getFrequenciesRef(),self.getSpectrumRef(),self.getPhasesRef()-p[1])
+    
+#    def getFilteredData(self,windowlen=100e9,maxorder=3):
+#        #windowlength should be smaller the etalon frequency, in order to emphasize them
+#        #for the length algorithm
+#        #it should be of the order of typical absorption line widthes for their analysis
+#        #remove etalon minima
 #        
-#
-#
+#        #what happens if the savgol filter is applied to real and imaginary part of the fft?!        
+#        #maybe nice to check?!
+#        fbins=self.getfbins()
+#        #100e9 should be replaced by the Etalon frequency 
+#        N_min=int(windowlen/fbins)
+#        order=min(N_min-1,maxorder)
 #        
-#class ImportMarburgData(THzTdData):
-#    #only an example how a importer could look like,
-#    #in case of inrim and Marburg data, not really needed, (just define params)
-#    def __init__(self,filename):
+#        absdata=signal.savgol_filter(self.getFAbs(),N_min-N_min%2+1,order)
+#        phdata=signal.savgol_filter(self.getFAbs(),N_min-N_min%2+1,order)
 #       
-#        params={'time_factor':1,
-#                'time_col':0,
-#                'X_col':1,
-#                'Y_col':2,
-#                'dec_sep':',',
-#                'skiprows':0}    
-#        THzTdData.__init__(self,filename,params)
+#        return py.column_stack((self.fdData[:,:3],absdata,phdata,self.fdData[:,5:]))
+
+    def getInterpolatedFDData(self,newfbins,strmode='linear'):
+        
+        oldfreqs=self.getFrequenciesRef()
+        newfreqs=np.arange(min(oldfreqs),max(oldfreqs),newfbins)
+                
+        inter=interp1d(oldfreqs,np.asarray([self.getSpectrumRef(),self.getPhasesRef()]),strmode,axis=1)
+        
+        return FrequencyDomainData(newfreqs,inter(newfreqs)[0],inter(newfreqs)[1].real)
+
+    def getSamplingPoints(self):
+        #the length of the fdData array
+        return self.getFrequenciesRef().shape[0]
+    
+    def getMovingAveragedData(self,window_size_GHz=-1):
+        
+        if window_size_GHz<0.5e9:
+            #window_size=int(self.getEtalonSpacing()/self.getfbins())
+            window_size=int(0.5e9/self.getfbins())
+        else:
+            window_size=int(window_size_GHz/self.getfbins())
+              
+        window_size+=window_size%2+1
+        window=np.ones(int(window_size))/float(window_size)
+        
+        spectrum=np.convolve(self.getSpectrumRef(), window, 'valid')
+        phase=np.convolve(self.getPhasesRef(), window, 'valid')
+        one=np.ones((window_size-1)/2,)
+        spectrum=np.concatenate((spectrum[0]*one,spectrum,spectrum[-1]*one))
+        phase=np.concatenate((phase[0]*one,phase,phase[-1]*one))
+        return FrequencyDomainData(self.getFrequenciesRef(),spectrum,phase)
+    
+#    def getBandwidth(self,dbDistancetoNoise=15):
+#        '''this function should return the lowest trustable and highest trustable
+#        frequency, along with the resulting bandwidth'''
 #        
-#class ImportInrimData(THzTdData):
-#  
-#    def __init__(self,filename):
-#        params={'time_factor':1,
-#                'time_col':2,
-#                'X_col':3,
-#                'Y_col':5,
-#                'dec_sep':'.',
-#                'skiprows':0}    
-#        THzTdData.__init__(self,filename,params)
-#  
+#        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
+#        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
+#        tfr=self.getfreqs()[ix]
 #
-#class FdData():
-#    '''A general fourier data class
-#    for initialization pass a time domain data object
-#    '''
-#    #Class variables, that restrict the accesible frequency data from 0 to 5 THz
-#    FMIN=0
-#    FMAX=5e12    
+#        return min(tfr),max(tfr)    
 #    
-#    def __init__(self,tdData,fbins=-1,fbnds=[FMIN,FMAX]):
-#        #FdData is always attached to a TdData Object
+#    def getEtalonSpacing(self):
+#        '''this should return the frequency of the Etalon
+#        '''
+#    
+#        #how to find a stable range!
+#        bw=self.getBandwidth()
+#        rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],2.1e12))  
 #        
-#        #the original _tdData object should be private and not accessed from outside
-#        #if you want to know it use FdData.getassTDData()
-#        self._tdData=tdData
+#        #need to interpolate data!
+#        oldfreqs=rdata[:,0]
+#        intpdata=interp1d(oldfreqs,rdata[:,3],'cubic')
 #        
-#        #calculate the fft and store it to the fdData array
-#        self.fdData=self._calculatefdData(self._tdData) 
+#        fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
+#        absnew=intpdata(fnew)
+#        #find minimia and maxima        
+#        ixmaxima=signal.argrelmax(absnew)[0]
+#        ixminima=signal.argrelmin(absnew)[0]
 #        
-#        #crop it to user bounds fbnds (min freq, max freq) and maybe also to a 
-#        #desired frequency step width fbins
-#        self.resetfdData(fbins,fbnds)
-#        self.maxDR=max(self.getDR())
-#
-#    def _calculatefdData(self,tdData):
-#        #no need to copy it before (access member variable is ugly but shorter)
-#
-#        #calculate the fft of the X channel
-#        fd=py.fft(tdData.getEX())
-#        #calculate absolute and phase values
-#        fdabs=abs(fd)
-#        fdph=abs(py.unwrap(py.angle(fd)))
-#        #calculate frequency axis
-#        dfreq=py.fftfreq(tdData.num_points,tdData.dt)
-#        #extrapolate phase to 0 and 0 frequency
-#        fdph=self.removePhaseOffset(dfreq,fdph)
-#        #set up the fdData array
-#        t=py.column_stack((dfreq,fd.real,fd.imag,fdabs,fdph))
-#        
-#        #this is so not nice!
-#        self.fdData=t
-#        unc=self.calculateFDunc()
-#        t=self.getcroppedData(t,0,unc[-1,0])
-#        
-#        #interpolate uncertainty        
-#        intpunc=interp1d(unc[:,0],unc[:,1:],axis=0)        
-#        unc=intpunc(t[:,0])
-#        return py.column_stack((t,unc))
-#
+#        fmaxima=py.mean(py.diff(fnew[ixmaxima]))
+#        fminima=py.mean(py.diff(fnew[ixminima]))
+#        #calculate etalon frequencies
+#        df=(fmaxima+fminima)*0.5 #the etalon frequencies
+#        print(str(df/1e9) + " GHz estimated etalon frequency")
+#        return df
+
+
+
+#    def getSNR(self):
+#        #returns the signal to noise ratio
+#        return self.getFAbs()/self.getFAbsUnc()    
+    
 #    def calculateFDunc(self):
 #        #Calculates the uncertainty of the FFT according to:
 #        #   - J. M. Fornies-Marquina, J. Letosa, M. Garcia-Garcia, J. M. Artacho, "Error Propagation for the transformation of time domain into frequency domain", IEEE Trans. Magn, Vol. 33, No. 2, March 1997, pp. 1456-1459
@@ -465,35 +591,7 @@ class TimeDomainData():
 #        
 #        t=py.column_stack((self.getfreqs(),unc_E_real,unc_E_imag,unc_E_abs,unc_E_ph))
 #        return self.getcroppedData(t)  
-#
-#    def doPlot(self):
-#        #plot the absolute and phase of the fdData array
-#        py.figure('FD-ABS-Plot')
-#        py.plot(self.getfreqsGHz(),20*py.log10(self.getFAbs()))
-#        py.xlabel('Frequency in GHz')
-#        py.ylabel('Amplitude, arb. units')
-#        
-#        py.figure('FD-PHASE-Plot')
-#        py.plot(self.getfreqsGHz(),self.getFPh())   
-#             
-#    def doPlotWithUnc(self):
-#        #plot absolute and phase along with uncertainties
-#        f=1
-#
-#        uabs=unumpy.uarray(self.getFAbs(),self.getFAbsUnc())
-#        #scale the uncertainty for the 20*log10 plot
-#        uabs=20*unumpy.log10(uabs)
-#        u_a=unumpy.nominal_values(uabs)
-#        u_s=unumpy.std_devs(uabs)
-#        
-#        py.figure('FD-ABS-UNC-Plot')
-#        py.plot(self.getfreqsGHz(),u_a)
-#        py.plot(self.getfreqsGHz(),u_a+u_s,'--',self.getfreqsGHz(),u_a-u_s,'--')
-#
-#        py.figure('FD-PH-UNC-Plot')
-#        py.plot(self.getfreqsGHz(),self.getFPh())
-#        py.plot(self.getfreqsGHz(),self.getFPh()+f*self.getFPhUnc(),'--',self.getfreqsGHz(),self.getFPh()-self.getFPhUnc(),'--')
-#
+
 #    def findAbsorptionLines(self):
 #        #no interpolation here, just return the measured data peak index
 #        tresh=6 #db treshhold to detect a line
@@ -563,26 +661,8 @@ class TimeDomainData():
 #            
 #        #if len(peaks)>2:
 #        #(peakfreqs[1]-peakfreqs[0])
-#    
-#    def getassTDData(self):
-#        #return the underlying tdData object
-#        return self._tdData
-#
-#    def getBandwidth(self,dbDistancetoNoise=15):
-#        #this function should return the lowest trustable and highest trustable
-#        #frequency, along with the resulting bandwidth
-#        
-#        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
-#        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
-#        tfr=self.getfreqs()[ix]
-#
-#        return min(tfr),max(tfr)
-#
-#    def getcroppedData(self,data,startfreq=FMIN,endfreq=FMAX):
-#        #this function returns the array data cropped from startfreq to endfreq
-#        ix=py.all([data[:,0]>=startfreq,data[:,0]<=endfreq],axis=0)
-#        return data[ix,:]
-#
+
+
 #    def getDR(self):
 #        #this function should return the dynamic range
 #        #this should be the noiselevel of the fft
@@ -594,177 +674,6 @@ class TimeDomainData():
 #        one=py.ones((2,))
 #        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
 #        return hlog-20*py.log10(noiselevel)         
-#
-#    def getEtalonSpacing(self):
-#        #this should return the frequency of the Etalon
-#    
-#    
-#        #how to find a stable range!
-#        bw=self.getBandwidth()
-#        rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],2.1e12))  
-#        
-#        #need to interpolate data!
-#        oldfreqs=rdata[:,0]
-#        intpdata=interp1d(oldfreqs,rdata[:,3],'cubic')
-#        
-#        fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
-#        absnew=intpdata(fnew)
-#        #find minimia and maxima        
-#        ixmaxima=signal.argrelmax(absnew)[0]
-#        ixminima=signal.argrelmin(absnew)[0]
-#        
-#        fmaxima=py.mean(py.diff(fnew[ixmaxima]))
-#        fminima=py.mean(py.diff(fnew[ixminima]))
-#        #calculate etalon frequencies
-#        df=(fmaxima+fminima)*0.5 #the etalon frequencies
-#        print(str(df/1e9) + " GHz estimated etalon frequency")
-#        return df
-#
-#    def getFReal(self):
-#        #the real part of the fft(tdData)
-#        return self.fdData[:,1]
-#    def getFImag(self):
-#        #the imag part of the fft(tdData)
-#        return self.fdData[:,2]
-#    def getFAbs(self):
-#        #the absolute value of fft(tdData)
-#        return self.fdData[:,3]
-#    def getFPh(self):
-#        #the phase of the fourierdomaindata
-#        return self.fdData[:,4]
-#    def getFRealUnc(self):
-#        #the uncertainty of the real part of the fft
-#        return self.fdData[:,5]
-#    def getFImagUnc(self):
-#        #the uncertainty of the imag part of the fft        
-#        return self.fdData[:,6]
-#    def getFAbsUnc(self):
-#        #the uncertainty of the absolute value
-#        #maybe the calculation can also be done here, since it is not needed often
-#        return self.fdData[:,7]
-#    def getFPhUnc(self):
-#        #the uncertainty of the phase value
-#        return self.fdData[:,8]
-#
-#    def getfbins(self):
-#        #the frequency spacing
-#        return abs(self.fdData[1,0]-self.fdData[0,0])
-#
-#    def getFilteredData(self,windowlen=100e9,maxorder=3):
-#        #windowlength should be smaller the etalon frequency, in order to emphasize them
-#        #for the length algorithm
-#        #it should be of the order of typical absorption line widthes for their analysis
-#        #remove etalon minima
-#        
-#        #what happens if the savgol filter is applied to real and imaginary part of the fft?!        
-#        #maybe nice to check?!
-#        fbins=self.getfbins()
-#        #100e9 should be replaced by the Etalon frequency 
-#        N_min=int(windowlen/fbins)
-#        order=min(N_min-1,maxorder)
-#        
-#        absdata=signal.savgol_filter(self.getFAbs(),N_min-N_min%2+1,order)
-#        phdata=signal.savgol_filter(self.getFAbs(),N_min-N_min%2+1,order)
-#       
-#        return py.column_stack((self.fdData[:,:3],absdata,phdata,self.fdData[:,5:]))
-#    
-#    def getfreqs(self):
-#        #return the frequency axis
-#        return self.fdData[:,0]
-#
-#    def getfreqsGHz(self):
-#        #return the frequency axis in GHz
-#        return self.getfreqs()*1e-9         
-#
-#    def getInterpolatedFDData(self,newfbins,strmode='linear'):
-#        #not only for this function, also for others maybe useful: 
-#        #check if it is possible to give as an argument a slice, i.e.
-#        # '1:' for interpolating all data, '3' for only the absdata and so on 
-#        oldfreqs=self.getfreqs()
-#        newfreqs=py.arange(min(oldfreqs),max(oldfreqs),newfbins)
-#        
-#        interfdData=interp1d(oldfreqs,self.fdData[:,1:],strmode,axis=0)
-#        
-#        return py.column_stack((newfreqs,interfdData(newfreqs)))
-#
-#    def getLength(self):
-#        #the length of the fdData array
-#        return self.fdData.shape[0]
-#    
-#    def getmaxfreq(self):
-#        #take care of constant offset what is the best lower range?
-#        cutted=self.getcroppedData(self.fdData,150e9,FdData.FMAX)
-#        fmax=cutted[py.argmax(cutted[:,3]),0]
-#        return fmax
-#
-#    def getmovingAveragedData(self,window_size_GHz=-1):
-#        #so far unelegant way of convolving the columns one by one
-#        #even not nice, improvement possible?
-#        if window_size_GHz<0.5e9:
-#            window_size=int(self.getEtalonSpacing()/self.getfbins())
-#        else:
-#            window_size=int(window_size_GHz/self.getfbins())
-#              
-#        window_size+=window_size%2+1
-#        window=py.ones(int(window_size))/float(window_size)
-#        
-#        dataabs=py.convolve(self.getFAbs(), window, 'valid')
-#        dataph=py.convolve(self.getFPh(), window, 'valid')
-#        one=py.ones((window_size-1)/2,)
-#        dataabs=py.concatenate((dataabs[0]*one,dataabs,dataabs[-1]*one))
-#        dataph=py.concatenate((dataph[0]*one,dataph,dataph[-1]*one))
-#        return py.column_stack((self.fdData[:,:3],dataabs,dataph,self.fdData[:,5:]))
-#    
-#    def getSNR(self):
-#        #returns the signal to noise ratio
-#        return self.getFAbs()/self.getFAbsUnc()
-#
-#    def removePhaseOffset(self,freqs,ph,startfreq=200e9,endfreq=1e12):
-#        #cut phase to reasonable range:
-#        ph_c=self.getcroppedData(py.column_stack((freqs,ph)),startfreq,endfreq)
-#        #determine the slope and the offset      
-#        p=py.polyfit(ph_c[:,0],ph_c[:,1],1)
-#        #return full phase-offset(croppedPhase)
-#        return ph-p[1]
-#     
-#    def resetfdData(self,fbins=-1,fbnds=[FMIN,FMAX]):
-#        #crop and zeropadd the fdData, starting from _tdData again!
-#        if fbins>0 and self.getfbins()>fbins:
-#            self.zeroPadd(fbins)
-#            
-#        self.setFDData(self.getcroppedData(self.fdData,fbnds[0],fbnds[1]))
-#      
-#    def setTDData(self,tdData):
-#        #Neccessary? couldn't we just create a new object with init?
-#        fbins_old=self.getfbins()
-#        minf_old=min(self.getfreqs())
-#        maxf_old=max(self.getfreqs())
-#        self._tdData=tdData        
-#        self.setFDData(self._calculatefdData(self._tdData))
-#        
-#        self.resetfdData(fbins_old,[minf_old,maxf_old])
-#
-#    def setFDData(self,fdData):
-#        #sets the fdData array, obsolete?
-#        self.fdData=fdData
-#
-#    def setPhase(self,newPh):
-#        #sets the Phase, needed for example for removing offsets
-#        if len(newPh)!=self.getLength():
-#            print('Setting phase not possible, wrong length')
-#        else:
-#            self.fdData[:,4]=newPh
-#
-#    def zeroPadd(self,fbins):
-#        #zero padd the underlying tdData such that the fbins afterwards are fbins
-#        spac=1/self._tdData.dt/fbins
-#        actlen=self._tdData.getLength()
-#        nozeros=py.ceil(spac-actlen)
-#        self._tdData.zeroPaddData(nozeros)
-#        #leave the old bnds in place
-#        bnds=[min(self.getfreqs()),max(self.getfreqs())]
-#        zpd=self._calculatefdData(self._tdData)
-#        self.setFDData(self.getcroppedData(zpd,bnds[0],bnds[1]))
         
 if __name__=="__main__":
     params={'time_factor':1,
@@ -773,7 +682,6 @@ if __name__=="__main__":
             'Y_col':2,
             'dec_sep':'.',
             'skiprows':1}
-    files=glob.glob('Reference*.txt')
-    datas=[]
-    for fn in files:
-        datas.append(TimeDomainData.fromFile(fn,params))
+    files=glob.glob('*.txt')
+    data_averaged=TimeDomainData.importMultipleFiles(files,params)
+    fdata=FrequencyDomainData.fromTimeDomainData(data_averaged)
