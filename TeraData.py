@@ -687,6 +687,6 @@ if __name__=="__main__":
             'Y_col':2,
             'dec_sep':'.',
             'skiprows':1}
-    files=glob.glob('*.txt')
+    files=glob.glob('Reference*.txt')
     data_averaged=TimeDomainData.importMultipleFiles(files,params)
     fdata=FrequencyDomainData.fromTimeDomainData(data_averaged)

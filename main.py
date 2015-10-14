@@ -72,12 +72,29 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.preferences.show()
         
     def dataManipulationTemporarilyUpdatePlot(self):    
-        timeshift=self.ui.dsbTimeShift.value()
+        timeshift=self.ui.dsbTimeShift.value()*1e-12
         factor=self.ui.dsbAmplitudeFactor.value()
        
         where=self.ui.cbwhichGraphs.currentIndex()
-        tempData=self.ui.fileTree.topLevelItem(where-2).tdData
-                
+        
+        #check if this is the first manipulation of the original data
+        if self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1).text(1)!='__tempdata__':
+            x=self.fillTree('__tempdata__',self.ui.fileTree.topLevelItem(where-2).tdData)
+            x.color='0.75'
+            self.doTdFdPlot(x)
+        #should be set invisible self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+        
+        tempItem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+        tempItem.color='0.75'
+        #manipulate the temporary data
+        tdata=self.ui.fileTree.topLevelItem(where-2).tdData
+        uefield=tdata.getUEfield()
+        uefield*=factor
+        tdata=TeraData.TimeDomainData(tdata.getTimeAxisRef()+timeshift,unumpy.nominal_values(uefield),unumpy.std_devs(uefield),tdata.getDataSetName())
+        tempItem.tdData=tdata
+        tempItem.fdData=TeraData.FrequencyDomainData.fromTimeDomainData(tdata)
+        self.doTdFdPlot(tempItem)
+            
         
         #first try to add just to the first entry a new child        
 #        if where>1:
@@ -406,37 +423,29 @@ class MyWindow(QtGui.QMainWindow):
         
         thztreeitem.setText(3,'df=' +'{:3.2f}'.format(thztreeitem.fdData.getfbins()/1e9) + 'GHz' +'\n'
                                 'Bandwidth='+'{:3.1f}'.format((d[1]-d[0])/1e12) + 'THz')
-
-    def doTemporaryPlot(self,tdata,fdata):
-        temptdline=self.ui.spectrumCanvas.figure.axes[0].plot(tdata.getTimeAxisRef()*1e12,tdata.getEfield(),'-k')
-            
-        absdata=20*np.log10(abs(fdata.getSpectrumRef()))
-        absdata-=np.amax(absdata)
-        tempfdlineabs=self.ui.spectrumCanvas.figure.axes[1].plot(fdata.getFrequenciesRef()*1e-12,absdata,'-k')
-        tempfdlinephase=self.ui.spectrumCanvas.figure.axes[2].plot(fdata.getFrequenciesRef()*1e-12,fdata.getPhasesRef(),'-k')
-        
-        self.refreshCanvas()    
-        return temptdline,tempfdlineabs,tempfdlinephase        
-        
     
     def doTdFdPlot(self,thztreeitem):
         #in case no color yet defined
         if thztreeitem.color==None:
             thztreeitem.color=plt.cm.brg(np.random.rand(1)[0])
-
+        
         #in case of update, remove existing lines from plot, 
         for line in thztreeitem.tdline:
             line.set_xdata(thztreeitem.tdData.getTimeAxisRef()*1e12)
             line.set_ydata(thztreeitem.tdData.getEfield())
+            line.set_color=thztreeitem.color            
+            print(thztreeitem.color)    
             
         for line in thztreeitem.fdlineabs:
             absdata=20*np.log10(abs(thztreeitem.fdData.getSpectrumRef()))
             line.set_xdata(thztreeitem.fdData.getFrequenciesRef()*1e-12)
             line.set_ydata(absdata-np.amax(absdata))
+            line.set_color=thztreeitem.color
             
         for line in thztreeitem.fdlinephase:
             line.set_xdata(thztreeitem.fdData.getFrequenciesRef()*1e-12)
             line.set_ydata(thztreeitem.fdData.getPhasesRef())
+            line.set_color=thztreeitem.color            
             
         if len(thztreeitem.tdline)==0:
             
