@@ -13,45 +13,45 @@ class TimeDomainData():
     def fromFile(filename,fileformat):
         try:
             #if no Y_col is specified            
-            if 'Y_col' in params:
+            if 'Y_col' in fileformat:
                 #import it right away
-                if params['dec_sep']=='.':
+                if fileformat['dec_sep']=='.':
                     data=np.loadtxt(filename,
-                                usecols=(params['time_col'],
-                                         params['X_col'],
-                                         params['Y_col']),
-                                skiprows=params['skiprows'])
+                                usecols=(fileformat['time_col'],
+                                         fileformat['X_col'],
+                                         fileformat['Y_col']),
+                                skiprows=fileformat['skiprows'])
                                 
-                elif params['dec_sep']==',':
+                elif fileformat['dec_sep']==',':
                     #if the decimal separator is , do a replacement
                     str2float=lambda val: float(val.replace(',','.'))
                     data=np.loadtxt(filename,
-                                converters={params['time_col']:str2float,
-                                            params['X_col']:str2float,
-                                            params['Y_col']:str2float},
-                                usecols=(params['time_col'],
-                                         params['X_col'],
-                                         params['Y_col']),
-                                skiprows=params['skiprows'])
+                                converters={fileformat['time_col']:str2float,
+                                            fileformat['X_col']:str2float,
+                                            fileformat['Y_col']:str2float},
+                                usecols=(fileformat['time_col'],
+                                         fileformat['X_col'],
+                                         fileformat['Y_col']),
+                                skiprows=fileformat['skiprows'])
                 timeaxis=data[:,0]
                 efield=TimeDomainData._rotateToXChannel(data[:,1],data[:,2])
             else:
                 #import it right away
-                if params['dec_sep']=='.':
+                if fileformat['dec_sep']=='.':
                     data=np.loadtxt(filename,
-                                usecols=(params['time_col'],
-                                         params['X_col']),
-                                skiprows=params['skiprows'])
+                                usecols=(fileformat['time_col'],
+                                         fileformat['X_col']),
+                                skiprows=fileformat['skiprows'])
                                 
-                elif params['dec_sep']==',':
+                elif fileformat['dec_sep']==',':
                     #if the decimal separator is , do a replacement
                     str2float=lambda val: float(val.replace(',','.'))
                     data=np.loadtxt(filename,
-                                converters={params['time_col']:str2float,
-                                            params['X_col']:str2float},
-                                usecols=(params['time_col'],
-                                         params['X_col']),
-                                skiprows=params['skiprows'])
+                                converters={fileformat['time_col']:str2float,
+                                            fileformat['X_col']:str2float},
+                                usecols=(fileformat['time_col'],
+                                         fileformat['X_col']),
+                                skiprows=fileformat['skiprows'])
                 timeaxis=data[:,0]
                 efield=data[:,1]
         except IOError:
@@ -59,7 +59,7 @@ class TimeDomainData():
             return 0
             
         #scale the timaaxis
-        timeaxis*=params['time_factor']
+        timeaxis*=fileformat['time_factor']
         
         #if the measurement was taken in negative time direction, flip the data
         #INRIM Mode
@@ -221,8 +221,9 @@ class TimeDomainData():
             
     def importMultipleFiles(fns,fileformats):
         datas=[]
-        for fn in files:
-            datas.append(TimeDomainData.fromFile(fn,params))
+        print(fileformats)
+        for fn in fns:
+            datas.append(TimeDomainData.fromFile(fn,fileformats))
             
         av_data=TimeDomainData._preProcessData(datas)
         
@@ -524,16 +525,34 @@ class FrequencyDomainData():
         phase=np.concatenate((phase[0]*one,phase,phase[-1]*one))
         return FrequencyDomainData(self.getFrequenciesRef(),spectrum,phase)
     
-#    def getBandwidth(self,dbDistancetoNoise=15):
-#        '''this function should return the lowest trustable and highest trustable
-#        frequency, along with the resulting bandwidth'''
-#        
+    def getBandwidth(self,dbDistancetoNoise=15):
+        '''this function should return the lowest trustable and highest trustable
+        frequency, along with the resulting bandwidth'''
+        
 #        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
 #        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
 #        tfr=self.getfreqs()[ix]
-#
-#        return min(tfr),max(tfr)    
-#    
+        tfr=[0,1]
+        return min(tfr),max(tfr)
+
+    def getSNR(self):
+        #returns the signal to noise ratio
+        #abs(self.getSpectrumRef())/1e-5
+        return -20*np.ones((self.getFrequenciesRef().shape))
+
+    def getDynamicRange(self):
+        '''Returns the Dynamic Range'''
+#        #this should be the noiselevel of the fft
+#        noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getAllPrecNoise()[0]))**2))
+#        #apply a moving average filter on log
+#        window_size=5
+#        window=py.ones(int(window_size))/float(window_size)
+#        hlog=py.convolve(20*py.log10(self.getFAbs()), window, 'valid')
+#        one=py.ones((2,))
+#        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
+        return -20*np.ones((self.getFrequenciesRef().shape))
+
+
 #    def getEtalonSpacing(self):
 #        '''this should return the frequency of the Etalon
 #        '''
@@ -561,9 +580,7 @@ class FrequencyDomainData():
 
 
 
-#    def getSNR(self):
-#        #returns the signal to noise ratio
-#        return self.getFAbs()/self.getFAbsUnc()    
+ 
     
 #    def calculateFDunc(self):
 #        #Calculates the uncertainty of the FFT according to:
@@ -662,18 +679,6 @@ class FrequencyDomainData():
 #        #if len(peaks)>2:
 #        #(peakfreqs[1]-peakfreqs[0])
 
-
-#    def getDR(self):
-#        #this function should return the dynamic range
-#        #this should be the noiselevel of the fft
-#        noiselevel=py.sqrt(py.mean(abs(py.fft(self._tdData.getAllPrecNoise()[0]))**2))
-#        #apply a moving average filter on log
-#        window_size=5
-#        window=py.ones(int(window_size))/float(window_size)
-#        hlog=py.convolve(20*py.log10(self.getFAbs()), window, 'valid')
-#        one=py.ones((2,))
-#        hlog=py.concatenate((hlog[0]*one,hlog,hlog[-1]*one))
-#        return hlog-20*py.log10(noiselevel)         
         
 if __name__=="__main__":
     params={'time_factor':1,
