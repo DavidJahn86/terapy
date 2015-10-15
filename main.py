@@ -8,12 +8,14 @@ import TeraData
 from uncertainties import unumpy
 from os import path
 import matplotlib.gridspec as gridspec
-
+import glob
+import copy
 
 from thzTreeWidgetItem import THzTreeWidgetItem
 from formatdialog import FormatDialog
 from selectplotstochange import PlotsToChange
 from ui_mainwindow import Ui_TeraView
+
 #for matplotlib widget
 
 
@@ -61,6 +63,18 @@ class MyWindow(QtGui.QMainWindow):
         self.TopLevelItemMenu.addAction(self.removeItemAction)        
         self.ChildMenu.addAction(self.removeItemAction)
          
+        #for testing:
+        params={'time_factor':1,
+            'time_col':0,
+            'X_col':1,
+            'Y_col':2,
+            'dec_sep':'.',
+            'skiprows':1}
+        files=glob.glob('Reference*.txt')
+        tdData=TeraData.TimeDomainData.importMultipleFiles(files,params)
+        tdData.setDataSetName('test')
+        x=self.fillTree('test',tdData)          
+         
         self.show()
     
     def showWindowing(self):
@@ -68,6 +82,7 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.preferences.show()
     
     def showDataManipulation(self):
+        #check if this is the first manipulation of the original data or if a tempdata entry is already existing
         self.ui.preferences.setCurrentIndex(0)
         self.ui.preferences.show()
         
@@ -77,24 +92,15 @@ class MyWindow(QtGui.QMainWindow):
        
         where=self.ui.cbwhichGraphs.currentIndex()
         
-        #check if this is the first manipulation of the original data
-        if self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1).text(1)!='__tempdata__':
-            x=self.fillTree('__tempdata__',self.ui.fileTree.topLevelItem(where-2).tdData)
-            x.color='0.75'
-            self.doTdFdPlot(x)
-        #should be set invisible self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where-2))
         
-        tempItem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
-        tempItem.color='0.75'
         #manipulate the temporary data
-        tdata=self.ui.fileTree.topLevelItem(where-2).tdData
+        tdata=tempItem.tdData
         uefield=tdata.getUEfield()
         uefield*=factor
         tdata=TeraData.TimeDomainData(tdata.getTimeAxisRef()+timeshift,unumpy.nominal_values(uefield),unumpy.std_devs(uefield),tdata.getDataSetName())
-        tempItem.tdData=tdata
-        tempItem.fdData=TeraData.FrequencyDomainData.fromTimeDomainData(tdata)
-        self.doTdFdPlot(tempItem)
-            
+        self.temporaryUpdate(tempItem,tdata)
+ 
         
         #first try to add just to the first entry a new child        
 #        if where>1:
@@ -112,39 +118,76 @@ class MyWindow(QtGui.QMainWindow):
         self.refreshCanvas()
     
     def applyTDManipulation(self):
+
+        #make sure that the data of the last item is correct   
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)    
+        if not lastitem.tempitem:
+            self.dataManipulationTemporarilyUpdatePlot()
+        
         where=self.ui.cbwhichGraphs.currentIndex()
         
-        #first try to add just to the first entry a new child        
-        if where>1:
-            item=self.ui.fileTree.topLevelItem(where-2)
-            if self.ui.rbManipulateCopy.isChecked():
-                tdData=item.tdData.tdData
-                tdData[:,0]=item.tdline[0].get_xdata()
-                tdData[:,1]=item.tdline[0].get_ydata()
-                #take care uncertainty missing!
-                ttdData=TeraData.THzTdData(tdData,existing=True)
-                self.fillTree('copy of ' + item.tdline[0].get_label(),ttdData)
-            else:
-                item.tdData.tdData[:,0]=item.tdline[0].get_xdata()
-                item.tdData.tdData[:,1]=item.tdline[1].get_ydata()
-                
+        if self.ui.rbManipulateCopy.isChecked():
+            #should be the temporary data 
+            self.insertTemporaryCopy()
+            self.ui.preferences.hide()
         else:
-            for row in range(self.ui.fileTree.topLevelItemCount()):
-                if where==1 or self.ui.fileTree.topLevelItem(row).checkState(0):
-                    item=self.ui.fileTree.topLevelItem(row)
-                    if self.ui.rbManipulateCopy.isChecked():
-                        pass
-#                        tdData=
-#                        self.fillTree('copy ' + )
-                    else:
-                        pass
+            self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where-2))
+            self.ui.preferences.hide()
         
         
     def cancelPreferences(self):
         #also take back the preview in plots
-        for i in range(self.ui.fileTree.topLevelItemCount()):
-            self.doTdFdPlot(self.ui.fileTree.topLevelItem(i))
+        root=self.ui.fileTree.invisibleRootItem()
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+        if lastitem.tempitem:        
+            root.removeChild(lastitem)
         self.ui.preferences.hide()       
+    
+    def createTemporaryCopy(self,originalitem):
+        #check if last item is already a temporary item
+        #temporary items are not added to combo box
+        #temporary items are by default grey colored
+        if not self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1).tempitem:
+            x=THzTreeWidgetItem()
+            x.refreshCanvas=self.refreshCanvas
+            x.setFlags(x.flags() | QtCore.Qt.ItemIsEditable)
+            x.tdData=originalitem.tdData
+            x.fdData=TeraData.FrequencyDomainData.fromTimeDomainData(originalitem.tdData)
+            x.setCheckState(0,QtCore.Qt.Checked)
+            x.setText(1,originalitem.text(1))
+            x.color= plt.cm.colors.colorConverter.to_rgba('0.75')
+            col=QtGui.QColor(int(x.color[0]*255),int(x.color[1]*255),int(x.color[2]*255),int(x.color[3]*255))
+            x.setBackgroundColor(0,col)        
+            x.tempitem=True            
+            self.doTdFdPlot(x)
+            self.ui.fileTree.addTopLevelItem(x)
+            tempItem=x
+        else:
+            tempItem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+        return tempItem
+    
+    def temporaryUpdate(self,tempItem,newtdData,newfdData=None):
+        tempItem.tdData=newtdData
+        if newfdData is None:        
+            tempItem.fdData=TeraData.FrequencyDomainData.fromTimeDomainData(newtdData)
+        self.doTdFdPlot(tempItem)
+
+    def insertTemporaryCopy(self,originalItem=None):
+        '''overwrites originalItem if given, else inserts a copy'''
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+        if originalItem is None:
+            lastitem.color=plt.cm.brg(np.random.rand(1)[0])
+            col=QtGui.QColor(int(lastitem.color[0]*255),int(lastitem.color[1]*255),int(lastitem.color[2]*255),int(lastitem.color[3]*255))
+            lastitem.setBackgroundColor(0,col)
+            lastitem.tempitem=False
+            lastitem.setText(1,"Copy of " + lastitem.text(1))
+            lastitem.tdData.setDataSetName("Copy of " + lastitem.text(1))
+            self.doTdFdPlot(lastitem)
+        else:
+            originalItem.tdData=lastitem.tdData
+            originalItem.fdData=lastitem.fdData            
+            self.ui.fileTree.invisibleRootItem().removeChild(lastitem)
+            self.doTdFdPlot(originalItem)
     
     def refreshCanvas(self):
         #no legends so far
@@ -342,12 +385,15 @@ class MyWindow(QtGui.QMainWindow):
             for i in range(1,len(filenames)):
                 display_filename+=" \n" + path.split(str(filenames[i]))[1]
             tdData=TeraData.TimeDomainData.importMultipleFiles(filenames,fileformat)
+            tdData.setDataSetName(display_filename)
             x=self.fillTree(display_filename,tdData) 
         else:          
             for fn in filenames:
+                display_filename=path.split(str(fn))[1]
                 tdData=TeraData.TimeDomainData.fromFile(fn,fileformat)
                 tdData=tdData._removeLinearDrift()
-                x=self.fillTree(path.split(str(fn))[1],tdData)
+                tdData.setDataSetName(display_filename)
+                x=self.fillTree(display_filename,tdData)
         self.ui.mainStatus.clearMessage()
         return filenames
         
@@ -433,20 +479,24 @@ class MyWindow(QtGui.QMainWindow):
         for line in thztreeitem.tdline:
             line.set_xdata(thztreeitem.tdData.getTimeAxisRef()*1e12)
             line.set_ydata(thztreeitem.tdData.getEfield())
-            line.set_color=thztreeitem.color            
-            print(thztreeitem.color)    
+            line.set_color(thztreeitem.color)
+            line.set_label(thztreeitem.text(1))
             
         for line in thztreeitem.fdlineabs:
+            
             absdata=20*np.log10(abs(thztreeitem.fdData.getSpectrumRef()))
             line.set_xdata(thztreeitem.fdData.getFrequenciesRef()*1e-12)
             line.set_ydata(absdata-np.amax(absdata))
-            line.set_color=thztreeitem.color
+            line.set_color(thztreeitem.color)
+            line.set_label(thztreeitem.text(1))
             
         for line in thztreeitem.fdlinephase:
+            
             line.set_xdata(thztreeitem.fdData.getFrequenciesRef()*1e-12)
             line.set_ydata(thztreeitem.fdData.getPhasesRef())
-            line.set_color=thztreeitem.color            
-            
+            line.set_color(thztreeitem.color)            
+            line.set_label(thztreeitem.text(1))
+
         if len(thztreeitem.tdline)==0:
             
             thztreeitem.tdline=self.ui.spectrumCanvas.figure.axes[0].plot(thztreeitem.tdData.getTimeAxisRef()*1e12,thztreeitem.tdData.getEfield(),color=thztreeitem.color,label=thztreeitem.text(1))

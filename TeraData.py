@@ -240,6 +240,9 @@ class TimeDomainData():
 
     def getDataSetName(self):
         return self.datasetname
+        
+    def setDataSetName(self,newname):
+        self.datasetname=newname
 
     def getDynamicRange(self):
         #returns the dynamic range

@@ -16,6 +16,7 @@ class THzTreeWidgetItem(QtGui.QTreeWidgetItem):
         self.fdlineabs=[]
         self.fdlinephase=[]
         self.color=None
+        self.tempitem=False
         
     def __del__(self):
         for line in self.tdline:
