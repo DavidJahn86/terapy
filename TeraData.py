@@ -90,6 +90,14 @@ class TimeDomainData():
         XC_new=XChannel*np.cos(phase)+YChannel*np.sin(phase)
         #YC_new=-XC*.sin(phase)+YC*py.cos(phase)
         return XC_new 
+    
+    def fromFrequencyDomainData(fdata):
+        #if no negative frequency components are present (standard case, generate the correct data length)
+        timetrace=np.fft.irfft(fdata.getSpectrumRef())
+        timeaxis=np.fft.rfftfreq(len(timetrace)*2-1,fdata.getfbins()/2)
+        #so far uncertainty gets lost :-()        
+        
+        return TimeDomainData(timeaxis,timetrace)
         
     def estimateBGNoise(timeaxis,efield,timePreceedingSignal=-1):
         '''returns the standard deviation of the Background Noise
@@ -422,11 +430,10 @@ class FrequencyDomainData():
         '''creates a FrequencyDomainData object from a timedomaindata
         '''
         N=tdd.getSamplingPoints()
-        frequencies=np.fft.fftfreq(N,tdd.getTimeStep())
-        spectrum=np.fft.fft(tdd.getEfield())
+        frequencies=np.fft.rfftfreq(N,tdd.getTimeStep())
+        spectrum=np.fft.rfft(tdd.getEfield())
         phase=np.unwrap(np.angle(spectrum)) #
-        N=int(N/2)
-        return FrequencyDomainData(frequencies[:N],spectrum[:N],phase[:N])
+        return FrequencyDomainData(frequencies,spectrum,phase)
         
     def __init__(self,frequencies,spectrum,phase=None):
 
