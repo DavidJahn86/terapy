@@ -33,24 +33,48 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.actionPlot_Dynamic_Range.triggered.connect(self.plotDR)
         self.ui.actionPlot_SNR.triggered.connect(self.plotSNR)
         self.ui.actionPlot_uncertainty_intervals.triggered.connect(self.plotuncertainty)
-        
+
+        #Actions in Data Operations Menu
         self.ui.actionScale_Data.triggered.connect(self.showDataManipulation)
         self.ui.actionWindowing.triggered.connect(self.showWindowing) 
+        self.ui.actionZero_Padding.triggered.connect(self.showZeroPadding)
+        self.ui.actionInterpolate_Data.triggered.connect(self.showTDInterpolation)
+        
+        ##connect all the buttons in preferences menus
+        self.ui.preferences.hide()
+
+        #this is the first combobox of this type, but i will use it at several places again
+        graphsModel=self.ui.cbwhichGraphs.model()
+        self.ui.cbwhichGraphs_windowing.setModel(graphsModel)
+        self.ui.cbwhichGraphs_zeropadding.setModel(graphsModel)
+        self.ui.cbwhichGraphs_interpolation.setModel(graphsModel)
+        self.ui.cbwhichGraphs_5.setModel(graphsModel)
+        self.ui.cbwhichGraphs_6.setModel(graphsModel)
+        self.ui.cbwhichGraphs_7.setModel(graphsModel)
+        
+        #Buttons  in Spectrum analysis
+        self.ui.pbApplyTDManipulation.clicked.connect(self.applyTDManipulation)        
+        self.ui.pbPreviewTDManipulation.clicked.connect(self.dataManipulationTemporarilyUpdatePlot) 
+        self.ui.pbCancelTDManipulation.clicked.connect(self.cancelPreferences)
+        
+        self.ui.pbApplyWindowing.clicked.connect(self.applyWindowing)
+        self.ui.pbPreviewWindowing.clicked.connect(self.previewWindowing)
+        self.ui.pbCancelWindowing.clicked.connect(self.cancelPreferences)
+        
+        self.ui.pbApplyPadding.clicked.connect(self.applyZeroPadding)
+        self.ui.pbPreviewPadding.clicked.connect(self.previewZeroPadding)
+        self.ui.pbCancelPadding.clicked.connect(self.cancelPreferences)        
+        
+        self.ui.pbApplyInterpolation.clicked.connect(self.applyTDInterpolation)
+        self.ui.pbPreviewInterpolation.clicked.connect(self.previewTDInterpolation)
+        self.ui.pbCancelInterpolation.clicked.connect(self.cancelPreferences)
+        
+        #TreeView Behaviour        
         self.ui.fileTree.itemChanged.connect(self.updateSpectrumAnalysisPlot)
         self.ui.fileTree.itemDoubleClicked.connect(self.onTreeWidgetItemDoubleClicked)
         self.ui.fileTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.fileTree.customContextMenuRequested.connect(self.onCustomContextMenu)
-        
-        self.ui.preferences.hide()
-        #this is the first combobox of this type, but i will use it at several places again
-#        self.cbwhichGraphsModel=self.ui.cbwhichGraphs.model()
-#        self.ui.cbwhichGraphs.setModel(self.cbwhichGraphsModel)
-#        
-        #Actions in Spectrum analysis
-        self.ui.pbApplyTDManiuplation.clicked.connect(self.applyTDManipulation)        
-        self.ui.pbTDManipulatePreview.clicked.connect(self.dataManipulationTemporarilyUpdatePlot) 
-        self.ui.pbCancelTDManipulation.clicked.connect(self.cancelPreferences)
-        
+                
         self.removeItemAction=QtGui.QAction(self)
         self.removeItemAction.triggered.connect(self.removeCurrentlySelectedItem)
         self.removeItemAction.setText('Remove Selected Entry')
@@ -69,30 +93,142 @@ class MyWindow(QtGui.QMainWindow):
             'X_col':1,
             'Y_col':2,
             'dec_sep':'.',
-            'skiprows':1}
-        files=glob.glob('Reference*.txt')
+            'skiprows':0}
+        files=glob.glob('*Reference*.txt')
         tdData=TeraData.TimeDomainData.importMultipleFiles(files,params)
         tdData.setDataSetName('test')
         x=self.fillTree('test',tdData)          
          
         self.show()
+        
+    def showTDInterpolation(self):
+        self.ui.preferences.setCurrentIndex(3)
+        self.ui.le_newName_interpolation.setText("Copy of " + self.ui.cbwhichGraphs_interpolation.currentText())
+        self.ui.preferences.show()
+
+    def previewTDInterpolation(self):
+        
+        step=self.ui.dsbinterpolationStep.value()*1e-15        
+        
+        where=self.ui.cbwhichGraphs_windowing.currentIndex()        
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+        
+        #manipulate the temporary data
+        tdata=tempItem.tdData
+        mint=min(tdata.getTimeAxisRef())
+        maxt=max(tdata.getTimeAxisRef())
+        desiredLength=int((maxt-mint)/step)
+        tdata=tdata.getInterpolatedTimeDomainData(desiredLength,mint,maxt)
+        self.temporaryUpdate(tempItem,tdata)
+        self.refreshCanvas()
+    
+    def applyTDInterpolation(self):
+        #make sure that the data of the last item is correct   
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)    
+        if not lastitem.tempitem:
+            self.previewTDInterpolation()
+        
+        where=self.ui.cbwhichGraphs_interpolation.currentIndex()
+        
+        if self.ui.rbManipulateCopy_interpolation.isChecked():
+            #should be the temporary data 
+            self.insertTemporaryCopy()
+            self.ui.preferences.hide()
+        else:
+            self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+            self.ui.preferences.hide()            
+        
+        
+    def showZeroPadding(self):
+        self.ui.preferences.setCurrentIndex(2)
+        self.ui.le_newName_padding.setText("Copy of " + self.ui.cbwhichGraphs_zeropadding.currentText())
+        self.ui.preferences.show()
+
+    def previewZeroPadding(self):
+        
+        mode=self.ui.cbZeroPadding.currentIndex()
+        
+        where=self.ui.cbwhichGraphs_windowing.currentIndex()        
+        no_zeros=self.ui.sbNumberZeros.value()
+        
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+        
+        #manipulate the temporary data
+        tdata=tempItem.tdData
+        if mode==0:
+            tdata=tdata.zeroPaddData(no_zeros,paddmode='zero',where='end')   
+        elif mode==1:
+            tdata=tdata.zeroPaddData(no_zeros,paddmode='zero',where='start')   
+        elif mode==2:
+            tdata=tdata.zeroPaddData(no_zeros,paddmode='gaussian',where='end')    
+        elif mode ==3:
+            tdata=tdata.zeroPaddData(no_zeros,paddmode='gaussian',where='start')   
+
+        self.temporaryUpdate(tempItem,tdata)
+        self.refreshCanvas()
+    
+    def applyZeroPadding(self):
+        #make sure that the data of the last item is correct   
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)    
+        if not lastitem.tempitem:
+            self.previewZeroPadding()
+        
+        where=self.ui.cbwhichGraphs_zeropadding.currentIndex()
+        
+        if self.ui.rbManipulateCopy_Padding.isChecked():
+            #should be the temporary data 
+            self.insertTemporaryCopy()
+            self.ui.preferences.hide()
+        else:
+            self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+            self.ui.preferences.hide()    
     
     def showWindowing(self):
         self.ui.preferences.setCurrentIndex(1)
+        self.ui.le_newName_windowing.setText("Copy of " + self.ui.cbwhichGraphs_windowing.currentText())
         self.ui.preferences.show()
+
+    def previewWindowing(self):
+        windowfunction=self.ui.cbwindowfunction.currentText()
+        risingEdgelen=self.ui.dsb_risingEdge.value()*1e-12
+        where=self.ui.cbwhichGraphs_windowing.currentIndex()        
+        
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+        
+        #manipulate the temporary data
+        tdata=tempItem.tdData
+        tdata=tdata.getWindowedData(risingEdgelen,windowfunction)
+        self.temporaryUpdate(tempItem,tdata)
+        self.refreshCanvas()
     
+    def applyWindowing(self):
+        #make sure that the data of the last item is correct   
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)    
+        if not lastitem.tempitem:
+            self.previewWindowing()
+        
+        where=self.ui.cbwhichGraphs_windowing.currentIndex()
+        
+        if self.ui.rbManipulateCopy_windowing.isChecked():
+            #should be the temporary data 
+            self.insertTemporaryCopy()
+            self.ui.preferences.hide()
+        else:
+            self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+            self.ui.preferences.hide()
+            
     def showDataManipulation(self):
         #check if this is the first manipulation of the original data or if a tempdata entry is already existing
         self.ui.preferences.setCurrentIndex(0)
+        self.ui.leNewName.setText("Copy of " + self.ui.cbwhichGraphs.currentText())
         self.ui.preferences.show()
         
     def dataManipulationTemporarilyUpdatePlot(self):    
         timeshift=self.ui.dsbTimeShift.value()*1e-12
         factor=self.ui.dsbAmplitudeFactor.value()
-       
         where=self.ui.cbwhichGraphs.currentIndex()
         
-        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where-2))
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
         
         #manipulate the temporary data
         tdata=tempItem.tdData
@@ -100,21 +236,6 @@ class MyWindow(QtGui.QMainWindow):
         uefield*=factor
         tdata=TeraData.TimeDomainData(tdata.getTimeAxisRef()+timeshift,unumpy.nominal_values(uefield),unumpy.std_devs(uefield),tdata.getDataSetName())
         self.temporaryUpdate(tempItem,tdata)
- 
-        
-        #first try to add just to the first entry a new child        
-#        if where>1:
-#            item=self.ui.fileTree.topLevelItem(where-2)
-#            item.tdline[0].set_xdata(item.tdline[0].get_xdata()+timeshift)
-#            if factor!=0:
-#                item.tdline[0].set_ydata(item.tdline[0].get_ydata()*factor)
-#        else:
-#            for row in range(self.ui.fileTree.topLevelItemCount()):
-#                if where==1 or self.ui.fileTree.topLevelItem(row).checkState(0):
-#                    item=self.ui.fileTree.topLevelItem(row)
-#                    item.tdline[0].set_xdata(item.tdline[0].get_xdata()+timeshift)
-#                    if factor!=0:
-#                        item.tdline[0].set_ydata(item.tdline[0].get_ydata()*factor)
         self.refreshCanvas()
     
     def applyTDManipulation(self):
@@ -131,10 +252,9 @@ class MyWindow(QtGui.QMainWindow):
             self.insertTemporaryCopy()
             self.ui.preferences.hide()
         else:
-            self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where-2))
+            self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where))
             self.ui.preferences.hide()
-        
-        
+  
     def cancelPreferences(self):
         #also take back the preview in plots
         root=self.ui.fileTree.invisibleRootItem()
@@ -204,7 +324,7 @@ class MyWindow(QtGui.QMainWindow):
         
         if msg.exec_()==QtGui.QMessageBox.Ok:
             index=self.ui.fileTree.selectedIndexes()[0].row()
-            self.ui.cbwhichGraphs.removeItem(index+2)       
+            self.ui.cbwhichGraphs.removeItem(index)
             root=self.ui.fileTree.invisibleRootItem()
             for item in self.ui.fileTree.selectedItems():
                 (item.parent() or root).removeChild(item)

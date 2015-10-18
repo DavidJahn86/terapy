@@ -120,7 +120,7 @@
                       </widget>
                      </item>
                      <item row="7" column="2">
-                      <widget class="QPushButton" name="pbApplyTDManiuplation">
+                      <widget class="QPushButton" name="pbApplyTDManipulation">
                        <property name="text">
                         <string>Apply</string>
                        </property>
@@ -134,7 +134,7 @@
                       </widget>
                      </item>
                      <item row="7" column="1">
-                      <widget class="QPushButton" name="pbTDManipulatePreview">
+                      <widget class="QPushButton" name="pbPreviewTDManipulation">
                        <property name="text">
                         <string>Preview</string>
                        </property>
@@ -180,18 +180,7 @@
                       </widget>
                      </item>
                      <item row="1" column="0" colspan="3">
-                      <widget class="QComboBox" name="cbwhichGraphs">
-                       <item>
-                        <property name="text">
-                         <string>Selected</string>
-                        </property>
-                       </item>
-                       <item>
-                        <property name="text">
-                         <string>All</string>
-                        </property>
-                       </item>
-                      </widget>
+                      <widget class="QComboBox" name="cbwhichGraphs"/>
                      </item>
                      <item row="3" column="0">
                       <widget class="QLabel" name="label_2">
@@ -280,7 +269,7 @@
                      <item row="3" column="0">
                       <widget class="QLabel" name="label_4">
                        <property name="text">
-                        <string>Flat Top of </string>
+                        <string>Rising Edge of</string>
                        </property>
                       </widget>
                      </item>
@@ -292,18 +281,7 @@
                       </widget>
                      </item>
                      <item row="1" column="0" colspan="3">
-                      <widget class="QComboBox" name="cbwhichGraphs_2">
-                       <item>
-                        <property name="text">
-                         <string>Selected</string>
-                        </property>
-                       </item>
-                       <item>
-                        <property name="text">
-                         <string>All</string>
-                        </property>
-                       </item>
-                      </widget>
+                      <widget class="QComboBox" name="cbwhichGraphs_windowing"/>
                      </item>
                      <item row="2" column="1" colspan="2">
                       <widget class="QComboBox" name="cbwindowfunction">
@@ -322,15 +300,12 @@
                      <item row="3" column="2">
                       <widget class="QLabel" name="label_5">
                        <property name="text">
-                        <string>points</string>
+                        <string>ps</string>
                        </property>
                       </widget>
                      </item>
-                     <item row="3" column="1">
-                      <widget class="QSpinBox" name="spinBox"/>
-                     </item>
                      <item row="5" column="0">
-                      <widget class="QRadioButton" name="rbManipulateReplace_2">
+                      <widget class="QRadioButton" name="rbManipulateReplace_windowing">
                        <property name="text">
                         <string>Replace Data</string>
                        </property>
@@ -340,14 +315,17 @@
                       </widget>
                      </item>
                      <item row="5" column="1">
-                      <widget class="QRadioButton" name="rbManipulateCopy_2">
+                      <widget class="QRadioButton" name="rbManipulateCopy_windowing">
                        <property name="text">
                         <string>Copy to </string>
                        </property>
                       </widget>
                      </item>
                      <item row="5" column="2">
-                      <widget class="QLineEdit" name="le_newName"/>
+                      <widget class="QLineEdit" name="le_newName_windowing"/>
+                     </item>
+                     <item row="3" column="1">
+                      <widget class="QDoubleSpinBox" name="dsb_risingEdge"/>
                      </item>
                     </layout>
                    </widget>
@@ -379,7 +357,7 @@
                       </spacer>
                      </item>
                      <item row="7" column="2">
-                      <widget class="QPushButton" name="pbApplyZeroPadding">
+                      <widget class="QPushButton" name="pbApplyPadding">
                        <property name="text">
                         <string>Apply</string>
                        </property>
@@ -407,18 +385,7 @@
                       </widget>
                      </item>
                      <item row="1" column="0" colspan="3">
-                      <widget class="QComboBox" name="cbwhichGraphs_3">
-                       <item>
-                        <property name="text">
-                         <string>Selected</string>
-                        </property>
-                       </item>
-                       <item>
-                        <property name="text">
-                         <string>All</string>
-                        </property>
-                       </item>
-                      </widget>
+                      <widget class="QComboBox" name="cbwhichGraphs_zeropadding"/>
                      </item>
                      <item row="2" column="1" colspan="2">
                       <widget class="QComboBox" name="cbZeroPadding">
@@ -445,10 +412,14 @@
                       </widget>
                      </item>
                      <item row="3" column="1">
-                      <widget class="QSpinBox" name="sbNumberZeros"/>
+                      <widget class="QSpinBox" name="sbNumberZeros">
+                       <property name="maximum">
+                        <number>9999</number>
+                       </property>
+                      </widget>
                      </item>
                      <item row="5" column="0">
-                      <widget class="QRadioButton" name="rbManipulateReplace_3">
+                      <widget class="QRadioButton" name="rbManipulateReplace_Padding">
                        <property name="text">
                         <string>Replace Data</string>
                        </property>
@@ -458,14 +429,14 @@
                       </widget>
                      </item>
                      <item row="5" column="1">
-                      <widget class="QRadioButton" name="rbManipulateCopy_3">
+                      <widget class="QRadioButton" name="rbManipulateCopy_Padding">
                        <property name="text">
                         <string>Copy to </string>
                        </property>
                       </widget>
                      </item>
                      <item row="5" column="2">
-                      <widget class="QLineEdit" name="le_newName_2"/>
+                      <widget class="QLineEdit" name="le_newName_padding"/>
                      </item>
                      <item row="2" column="0">
                       <widget class="QLabel" name="label_8">
@@ -545,7 +516,7 @@
                       </widget>
                      </item>
                      <item row="4" column="0">
-                      <widget class="QRadioButton" name="rbManipulateReplace_4">
+                      <widget class="QRadioButton" name="rbManipulateReplace_interpolation">
                        <property name="text">
                         <string>Replace Data</string>
                        </property>
@@ -555,17 +526,17 @@
                       </widget>
                      </item>
                      <item row="4" column="1">
-                      <widget class="QRadioButton" name="rbManipulateCopy_4">
+                      <widget class="QRadioButton" name="rbManipulateCopy_interpolation">
                        <property name="text">
                         <string>Copy to </string>
                        </property>
                       </widget>
                      </item>
                      <item row="4" column="2">
-                      <widget class="QLineEdit" name="le_newName_3"/>
+                      <widget class="QLineEdit" name="le_newName_interpolation"/>
                      </item>
                      <item row="1" column="0" colspan="3">
-                      <widget class="QComboBox" name="cbwhichGraphs_4">
+                      <widget class="QComboBox" name="cbwhichGraphs_interpolation">
                        <item>
                         <property name="text">
                          <string>Selected</string>
@@ -1061,7 +1032,7 @@
      <x>0</x>
      <y>0</y>
      <width>1247</width>
-     <height>31</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

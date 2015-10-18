@@ -328,6 +328,7 @@ class TimeDomainData():
         '''
         #returns the blackmanwindowed tdData
         if windowlength_time>0:
+            #check that N is not too large! needs a fix here
             N=int(windowlength_time/self.getTimeStep())
             w=np.blackman(N*2)
             w=np.hstack((w[:N],np.ones((self.getSamplingPoints()-N*2),),w[N:]))
@@ -362,7 +363,7 @@ class TimeDomainData():
         '''zero padds the time domain data, it is possible to padd at the beginning,
         or at the end, and further gaussian or real zero padding is possible        
         '''
-
+        ##seems not to work for before padding (makes not often sense but yet where is the problem ? needs a fix!)
         desiredLength=int(desiredLength)
         #escape the function        
         if desiredLength<0:
