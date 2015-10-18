@@ -175,26 +175,28 @@ class TimeDomainData():
         
     def _removeTimeShift(timeDomainDatas):
         '''shifts the maxima of several pulses on top of each other to correct for time jitters'''
-        
-        peak_pos=[]
-        for tdd in timeDomainDatas:
-            time_max=tdd.getPeakPosition()
-            thisPeakData=tdd.getTimeSlice(time_max-0.5e-12,time_max+0.5e-12)
-            thisPeakData=thisPeakData.getInterpolatedTimeDomainData(20*thisPeakData.getSamplingPoints(),thisPeakData.timeaxis[0],thisPeakData.timeaxis[-1],tkind='cubic')
-            peak_pos.append(thisPeakData.getPeakPosition())
-        
-        peak_pos=np.asarray(peak_pos)
-        print('Peak Position standard deviation: ' + str(np.std(peak_pos*1e15)) + 'fs')
-        mp=np.mean(peak_pos)
-        
-        shiftedDatas=[]
-        for tdd,peak in zip(timeDomainDatas,peak_pos):
-            newTimeAxis=tdd.getTimeAxis()-(peak-mp)
+        if len(timeDomainDatas)>1:
+            peak_pos=[]
+            for tdd in timeDomainDatas:
+                time_max=tdd.getPeakPosition()
+                thisPeakData=tdd.getTimeSlice(time_max-0.5e-12,time_max+0.5e-12)
+                thisPeakData=thisPeakData.getInterpolatedTimeDomainData(20*thisPeakData.getSamplingPoints(),thisPeakData.timeaxis[0],thisPeakData.timeaxis[-1],tkind='cubic')
+                peak_pos.append(thisPeakData.getPeakPosition())
             
-            shiftedDatas.append(TimeDomainData(newTimeAxis,tdd.getEfield(),tdd.getUncertainty(),tdd.getDataSetName()))
-        
-        return shiftedDatas
-        
+            peak_pos=np.asarray(peak_pos)
+            print('Peak Position standard deviation: ' + str(np.std(peak_pos*1e15)) + 'fs')
+            mp=np.mean(peak_pos)
+            
+            shiftedDatas=[]
+            for tdd,peak in zip(timeDomainDatas,peak_pos):
+                newTimeAxis=tdd.getTimeAxis()-(peak-mp)
+                
+                shiftedDatas.append(TimeDomainData(newTimeAxis,tdd.getEfield(),tdd.getUncertainty(),tdd.getDataSetName()))
+            
+            return shiftedDatas
+        else:
+            return timeDomainDatas
+            
     def _preProcessData(timeDomainDatas,average=True,removeTimeShift=True,removeDrift=True):
         '''This function should preprocess the timeDomainData
         * averages the data if average=True, else returns a list of timeDomainDatas
@@ -209,19 +211,18 @@ class TimeDomainData():
             for tdd in timeDomainDatas:
                 #this removes Linear Drifts in X-Channel
                 tempTDDatas.append(tdd._removeLinearDrift())
-        
-        if removeTimeShift:
+                
+        if removeTimeShift and len(tempTDDatas)>1:
             #first shift maxima on top, than interpolate, doesn't affect unc array
             tempTDDatas=TimeDomainData._removeTimeShift(tempTDDatas)
         
-        if average:
+        if average and len(tempTDDatas)>1:
             tempTDDatas=TimeDomainData.averageTimeDomainDatas(tempTDDatas)
         
         return tempTDDatas
             
     def importMultipleFiles(fns,fileformats):
-        datas=[]
-        print(fileformats)
+        datas=[]        
         for fn in fns:
             datas.append(TimeDomainData.fromFile(fn,fileformats))
             
@@ -394,7 +395,7 @@ def importMarburgData(filenames):
             'Y_col':2,
             'dec_sep':',',
             'skiprows':0}
-    TimeDomainData.importMultipleFiles(filenames,params)
+    return TimeDomainData.importMultipleFiles(filenames,params)
 
 def importINRIMData(filenames):
     params={'time_factor':1,
@@ -403,7 +404,7 @@ def importINRIMData(filenames):
             'Y_col':5,
             'dec_sep':'.',
             'skiprows':0}    
-    TimeDomainData.importMultipleFiles(filenames,params)
+    return TimeDomainData.importMultipleFiles(filenames,params)
 
 
 class FrequencyDomainData():
@@ -423,8 +424,8 @@ class FrequencyDomainData():
         frequencies=np.fft.fftfreq(N,tdd.getTimeStep())
         spectrum=np.fft.fft(tdd.getEfield())
         phase=np.unwrap(np.angle(spectrum)) #
-        
-        return FrequencyDomainData(frequencies[:N/2],spectrum[:N/2],phase[:N/2])
+        N=int(N/2)
+        return FrequencyDomainData(frequencies[:N],spectrum[:N],phase[:N])
         
     def __init__(self,frequencies,spectrum,phase=None):
 
@@ -684,12 +685,4 @@ class FrequencyDomainData():
 
         
 if __name__=="__main__":
-    params={'time_factor':1,
-            'time_col':0,
-            'X_col':1,
-            'Y_col':2,
-            'dec_sep':'.',
-            'skiprows':1}
-    files=glob.glob('Reference*.txt')
-    data_averaged=TimeDomainData.importMultipleFiles(files,params)
-    fdata=FrequencyDomainData.fromTimeDomainData(data_averaged)
+    test=importINRIMData(['2014-01-30_no-sample_step.dat'])
