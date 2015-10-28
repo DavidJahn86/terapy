@@ -39,6 +39,7 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.actionWindowing.triggered.connect(self.showWindowing) 
         self.ui.actionZero_Padding.triggered.connect(self.showZeroPadding)
         self.ui.actionInterpolate_Data.triggered.connect(self.showTDInterpolation)
+        self.ui.actionAverage_Datasets.triggered.connect(self.showAveraging)
         
         ##connect all the buttons in preferences menus
         self.ui.preferences.hide()
@@ -68,6 +69,10 @@ class MyWindow(QtGui.QMainWindow):
         self.ui.pbApplyInterpolation.clicked.connect(self.applyTDInterpolation)
         self.ui.pbPreviewInterpolation.clicked.connect(self.previewTDInterpolation)
         self.ui.pbCancelInterpolation.clicked.connect(self.cancelPreferences)
+
+        self.ui.pbApplyAveraging.clicked.connect(self.applyAveraging)
+        self.ui.pbPreviewAveraging.clicked.connect(self.previewAveraging)
+        self.ui.pbCancelAveraging.clicked.connect(self.cancelPreferences)
         
         #TreeView Behaviour        
         self.ui.fileTree.itemChanged.connect(self.updateSpectrumAnalysisPlot)
@@ -101,6 +106,76 @@ class MyWindow(QtGui.QMainWindow):
          
         self.show()
         
+    def showAveraging(self):
+        self.ui.preferences.setCurrentIndex(4)
+        self.ui.lwAverage.clear()
+        
+        for ix in range(self.ui.fileTree.topLevelItemCount()):
+            it=self.ui.fileTree.topLevelItem(ix)
+            x=QtGui.QListWidgetItem()
+            x.setCheckState(QtCore.Qt.Checked)
+            x.setText(it.text(1))
+            col=QtGui.QColor(int(it.color[0]*255),int(it.color[1]*255),int(it.color[2]*255),int(it.color[3]*255))
+            x.setBackgroundColor(col)
+            self.ui.lwAverage.addItem(x)
+
+        self.ui.leNewName_averaging.setText('Average')
+        self.ui.preferences.show()
+
+    def previewAveraging(self):
+        
+        av_where=self.ui.cbAverageWhere.currentIndex() #0 for time domain 1 for fd averaging
+        
+        tdata=[]        
+        fdata=[]
+        for ix in range(self.ui.lwAverage.count()):
+            if self.ui.lwAverage.item(ix).checkState():
+                tdata.append(self.ui.fileTree.topLevelItem(ix).tdData)
+                fdata.append(self.ui.fileTree.topLevelItem(ix).fdData)
+                  
+        if av_where==0 and len(tdata)>1:
+            av_tdata=TeraData.TimeDomainData.averageTimeDomainDatas(tdata)
+            lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+       
+            if not lastitem.tempitem:
+                tempItem=self.fillTree('__tempItem__',av_tdata)
+                tempItem.tempitem=True
+                tempItem.color=plt.cm.colors.colorConverter.to_rgba('0.75')
+                col=QtGui.QColor(int(tempItem.color[0]*255),int(tempItem.color[1]*255),int(tempItem.color[2]*255),int(tempItem.color[3]*255))
+                self.refreshCanvas()
+            else:
+                self.temporaryUpdate(lastitem,av_tdata)            
+        
+        #averaging in frequency domain not yet implemented here
+        self.refreshCanvas()
+   
+    def applyAveraging(self):
+        #make sure that the data of the last item is correct   
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)    
+        if not lastitem.tempitem:
+            self.previewAveraging()
+        
+        self.insertTemporaryCopy()
+        self.ui.preferences.hide()
+        
+    def applyTDInterpolation(self):
+        #make sure that the data of the last item is correct   
+        lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)    
+        if not lastitem.tempitem:
+            self.previewTDInterpolation()
+        
+        where=self.ui.cbwhichGraphs_interpolation.currentIndex()
+        
+        if self.ui.rbManipulateCopy_interpolation.isChecked():
+            #should be the temporary data 
+            self.insertTemporaryCopy()
+            self.ui.preferences.hide()
+        else:
+            self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+            self.ui.preferences.hide()                    
+     
+
+    
     def showTDInterpolation(self):
         self.ui.preferences.setCurrentIndex(3)
         self.ui.le_newName_interpolation.setText("Copy of " + self.ui.cbwhichGraphs_interpolation.currentText())
@@ -302,10 +377,12 @@ class MyWindow(QtGui.QMainWindow):
             lastitem.tempitem=False
             lastitem.setText(1,"Copy of " + lastitem.text(1))
             lastitem.tdData.setDataSetName("Copy of " + lastitem.text(1))
+            self.updateDetails(lastitem)
             self.doTdFdPlot(lastitem)
         else:
             originalItem.tdData=lastitem.tdData
-            originalItem.fdData=lastitem.fdData            
+            originalItem.fdData=lastitem.fdData
+            self.updateDetails(originalItem)
             self.ui.fileTree.invisibleRootItem().removeChild(lastitem)
             self.doTdFdPlot(originalItem)
     
