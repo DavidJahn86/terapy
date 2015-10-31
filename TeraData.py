@@ -434,7 +434,19 @@ class FrequencyDomainData():
         spectrum=np.fft.rfft(tdd.getEfield())
         phase=np.unwrap(np.angle(spectrum)) #
         return FrequencyDomainData(frequencies,spectrum,phase)
+    
+    def divideTwoSpectra(fdNumerator,fdDenominator):
+        '''Calculate the Transferfunction fdNumerator/fdDenominator
+            In our context, most of the time fdNumerator=Sample Spectrum and fdDenominator=ReferenceSpectrum
+        '''
+        if not np.all((fdNumerator.getFrequenciesRef()-fdDenominator.getFrequenciesRef())==0):
+            print("Frequency axis of the two inputs are not equal, try to fix")            
+            return 0
         
+        spectrum=fdNumerator.getSpectrum()/fdDenominator.getSpectrum()
+        phase=fdNumerator.getPhases()-fdDenominator.getPhases()
+        return FrequencyDomainData(fdNumerator.getFrequencies(),spectrum,phase)
+    
     def __init__(self,frequencies,spectrum,phase=None):
 
         self.frequencies=np.copy(frequencies)
@@ -692,5 +704,5 @@ class FrequencyDomainData():
 #        #(peakfreqs[1]-peakfreqs[0])
 
         
-if __name__=="__main__":
-    test=importINRIMData(['2014-01-30_no-sample_step.dat'])
+#if __name__=="__main__":
+#    test=importINRIMData(['2014-01-30_no-sample_step.dat'])

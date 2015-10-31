@@ -1,5 +1,3 @@
-import pylab as py
-import glob
 import os
 from uncertainties import unumpy
 from scipy.interpolate import interp1d
@@ -7,47 +5,6 @@ from scipy.constants import c
 from scipy.optimize import minimize
 from TeraData import *
 
-#class HMeas(FdData):
-#    
-#    def __init__(self,FDref,FDsam,disableCut=False):
-#        #initialize the transferfunction with a reference and a sample measurement, 
-#        #both, FDref, FDsam are FdData objects
-#        #disableCut is normaly false, this means that H is calculated only inside the bandwidth
-#        self.fdref=FDref
-#        self.fdsam=FDsam
-#
-#        #sam td_data is more reliable for example noise calculation
-#        self._tdData=FDsam.getassTDData()
-#        
-#        if not disableCut:
-#            #standard: cut the fdData inbetween the trustable frequency region
-#            self.resetfdData()
-#        else:
-#            #use all frequencies
-#            self.fdData=self.calculatefdData()
-#        self.maxDR=max(self.getDR())
-#    
-#    def calculatefdData(self):
-#        #this function overrides the original fdData (that takes normally a tdData and does the fft)
-#        #here instead we use the fdref and fdsam objects to calculate H
-#        
-#        #check if it is possible to divide the Fdsam and Fdref objects
-#        prob_str=self._checkDataIntegrity()
-#        if not prob_str=='good':
-#            print("interpolation required")
-#            print(prob_str)
-#            self._commonFreqSamRef(prob_str)
-#        
-#        #calculate the uncertainty of H_real and H_imag
-#        H_unc=self.calculateFDunc()
-#
-#        #phase
-#        H_ph=self.fdref.getFPh()-self.fdsam.getFPh()
-#        #H itself
-#        H=(self.fdsam.getFReal()+1j*self.fdsam.getFImag())/(self.fdref.getFReal()+1j*self.fdref.getFImag())
-#        H=py.column_stack((self.fdref.getfreqs(),H.real,H.imag,abs(H),H_ph,H_unc))
-#        return H    
-#
 #    def calculateFDunc(self):  
 #        #Calculates the uncertainty of the FFT according to:
 #        #   - J. M. Fornies-Marquina, J. Letosa, M. Garcia-Garcia, J. M. Artacho, "Error Propagation for the transformation of time domain into frequency domain", IEEE Trans. Magn, Vol. 33, No. 2, March 1997, pp. 1456-1459
@@ -85,25 +42,6 @@ from TeraData import *
 #        
 #        return py.column_stack((py.sqrt(H_unc_real2),py.sqrt(H_unc_imag2),H_uncabs,H_uncph))
 #        
-#    def doPlot(self):
-#        #do the H-plots
-#        freqs=self.getfreqsGHz()
-#        
-#        py.figure('H-UNC-Plot')
-#        py.plot(freqs,self.getFReal())
-#        py.plot(freqs,self.getFImag())
-#        py.plot(freqs,self.getFReal()+self.getFRealUnc(),'g--',freqs,self.getFReal()-self.getFRealUnc(),'g--')
-#        py.plot(freqs,self.getFImag()+self.getFImagUnc(),'g--',freqs,self.getFImag()-self.getFImagUnc(),'g--')
-#        py.xlabel('Frequency in GHz')
-#        py.ylabel('Transfer Function')
-#        py.legend(('H_real','H_imag'))
-##        
-#        py.figure('H-PHASE-Plot')
-#        py.plot(freqs,self.getFPh())
-#       
-#        py.figure('H-ABS-Plot')
-#        py.plot(freqs,self.getFAbs())
-#        
 #    def estimateLDavid(self):
 #        #some method to estimate the thickness from phase slope + Etalon frequency
 #        #crop frequency axis
@@ -119,96 +57,6 @@ from TeraData import *
 #        l=c/2.0*(1.00027/df-kappa/py.pi)
 #        return [l,n]
 #
-#    def getDR(self):
-#        
-#         return self.fdsam.getDR()
-#            
-#    def manipulateFDData(self,fbins,fbnds,mode='interpolate'):
-#        #this method provides the means to change the underlying fdData objects and recalculate H
-#        #if just an interpolated H with fbins is needed, use getInterpolatedFdData from FdData class        
-#        #maybe I will delete it soon, because it shouldn't be used!       
-#        if fbins>0.5e9:
-#            if mode=='zeropadd':
-#                self.zeroPadd(fbins)
-#            else:
-#                self.fdref.setFDData(self.fdref.getInterpolatedFDData(fbins))
-#                self.fdsam.setFDData(self.fdsam.getInterpolatedFDData(fbins))
-#               
-#        self.fdref.setFDData(self.fdref.getcroppedData(self.fdref.fdData,fbnds[0],fbnds[1]))        
-#        self.fdsam.setFDData(self.fdsam.getcroppedData(self.fdsam.fdData,fbnds[0],fbnds[1]))
-#        
-#        self.fdData=self.calculatefdData()
-#
-#    def resetfdData(self,fbins=-1,fbnds=[FdData.FMIN,FdData.FMAX]):
-#        #restricts the H to fbnds, and also zeropadds to fbins
-#        minrf,maxrf=self.fdref.getBandwidth()
-#        minsf,maxsf=self.fdsam.getBandwidth()
-#        self.manipulateFDData(fbins,[max(minrf,minsf,FdData.FMIN),min(maxrf,maxsf,FdData.FMAX)])
-#        
-#    def zeroPadd(self,fbins):
-#        #zeropadding of H
-#        self.fdref.zeroPadd(fbins)
-#        self.fdsam.zeroPadd(fbins)
-#        self.calculatefdData()
-#
-#    def _checkDataIntegrity(self):
-#
-#        tdrefData=self.fdref.getassTDData()
-#        tdsamData=self.fdsam.getassTDData()
-#
-#        #begin and end of timeaxis should differ not more than 5 as
-#        if abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>5e-15:
-#            return 'td-Problem-phase'
-#
-#        #length of time axis should be identical
-#        if tdrefData.getLength()!=tdsamData.getLength():
-#            return 'td-Problem-len'
-#        
-#        
-#        if abs(tdrefData.tdData[-1,0]-tdsamData.tdData[-1,0])>1e-16 or\
-#            abs(tdrefData.tdData[0,0]-tdsamData.tdData[0,0])>1e-16:
-#            return 'td-Problem-interval'
-#        
-#        #length in frequency domain should be equal
-#        if self.fdref.getLength()!= self.fdsam.getLength():
-#            return 'fd-Problem-len'
-#            
-#        #frequency bins should be equal
-#        if not all(self.fdref.getfreqs()-self.fdsam.getfreqs()<1e6):
-#            return 'fd-Problem-axis'
-#         #else return       
-#        return 'good'
-#      
-#    def _commonFreqSamRef(self,prob_str):
-#        #take care, this actually manipulates the real underlying data!
-#        #maybe consider to do a deepcopy!
-#        tdref=self.fdref.getassTDData()
-#        tdsam=self.fdsam.getassTDData()
-#  
-#        #if the absolute time, at which one of the two measurements starts differs significantly
-#        #from the other, we should put out a warning, and put trailing zeros
-#        #after that we are ready for interpolating the data
-#        if prob_str=='td-Problem-phase':
-#            t_start_ref=tdref.tdData[0,0]
-#            t_start_sam=tdsam.tdData[0,0]
-#            N=int((t_start_sam-t_start_ref)/tdsam.dt)
-#            tdsam.zeroPaddData(N,'zero','start')
-#      
-#        #(max min notation for readability?
-#        cmin=max(min(tdref.getTimes()),min(tdsam.getTimes()))
-#        cmax=min(max(tdref.getTimes()),max(tdsam.getTimes()))
-#        clen=min(tdref.getLength(),tdsam.getLength())
-#        
-#        #safe also old bnds        
-#        minrf,maxrf=self.fdref.getBandwidth()
-#        minsf,maxsf=self.fdsam.getBandwidth()
-#                
-#        tdrefnew=THzTdData(tdref.getInterData(tdref.tdData,clen,cmin,cmax),tdref.getfilename(),tdref._thzdata_raw,existing=True)
-#        tdsamnew=THzTdData(tdsam.getInterData(tdsam.tdData,clen,cmin,cmax),tdsam.getfilename(),tdsam._thzdata_raw,existing=True)
-#        
-#        self.fdref=FdData(tdrefnew,-1,[min(minrf,minsf),max(maxrf,maxsf)])
-#        self.fdsam=FdData(tdsamnew,-1,[min(minrf,minsf),max(maxrf,maxsf)]) 
-        
 class teralyz():
     '''Finds the optical constants
     this class implements the solver, i.e. the length finding algorithm on the measurement
@@ -217,9 +65,9 @@ class teralyz():
     #refractive index of air
     n_0=1.00027-0.0000j
 
-    def __init__(self,measurementdata,thickness=None):
+    def __init__(self,H_measured,thickness=None):
         #measurementdata should be an object of type HMeas
-        self.H=measurementdata
+        self.H=H_measured
         #H of only the first pulse        
         self.H_firstPuls=self.getHFirstPuls()
         

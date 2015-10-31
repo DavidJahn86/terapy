@@ -94,7 +94,7 @@ class MyWindow(QtGui.QMainWindow):
             'Y_col':2,
             'dec_sep':'.',
             'skiprows':0}
-        files=glob.glob('*Reference*.txt')
+        files=glob.glob(r'C:\Users\david\Documents\messdaten\Ref*.txt')
         tdData=TeraData.TimeDomainData.importMultipleFiles(files,params)
         tdData.setDataSetName('test')
         x=self.fillTree('test',tdData)          

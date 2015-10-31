@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'mainwindow.ui'
 #
-# Created: Sat Oct 17 22:12:42 2015
+# Created: Mon Oct 19 10:04:16 2015
 #      by: PyQt4 UI code generator 4.10.4
 #
 # WARNING! All changes made in this file will be lost!
@@ -505,7 +505,7 @@ class Ui_TeraView(object):
         self.verticalLayout_2.addLayout(self.horizontalLayout)
         TeraView.setCentralWidget(self.centralWidget)
         self.menuBar = QtGui.QMenuBar(TeraView)
-        self.menuBar.setGeometry(QtCore.QRect(0, 0, 1247, 25))
+        self.menuBar.setGeometry(QtCore.QRect(0, 0, 1247, 31))
         self.menuBar.setObjectName(_fromUtf8("menuBar"))
         self.menuFile = QtGui.QMenu(self.menuBar)
         self.menuFile.setObjectName(_fromUtf8("menuFile"))
