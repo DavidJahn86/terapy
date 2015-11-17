@@ -17,6 +17,7 @@ class MatplotlibWidget(Canvas):
     def __init__(self,parent=None,title='',xlabel='',ylabel='',xlim=None,
                  ylim=None,xscale='linear',yscale='linear',width=4,height=3,dpi=100,hold=False):
         self.figure=Figure(figsize=(width,height),dpi=dpi)
+        self.figure.patch.set_alpha(0)
         self.axes=[]
 #        
 #        self.axes.set_title(title)
@@ -38,7 +39,7 @@ class MatplotlibWidget(Canvas):
           
 #        Canvas.setSizePolicy(self,QSizePolicy.Expanding,QSizePolicy.Expanding)
         Canvas.updateGeometry(self)
-        
+                
         self.navigationToolbar=NavigationToolbar(self,self)
         
     def sizeHint(self):
@@ -63,6 +64,7 @@ if __name__=='__main__':
             self.setCentralWidget(self.mplwidget)
             self.mplwidget.axes.append(self.mplwidget.figure.add_subplot(111))
             self.plot(self.mplwidget.axes)
+            self.mplwidget.figure.patch.set_alpha(0)
             x=linspace(-10,10)            
             newline,=self.mplwidget.axes[0].plot(x,x**4)
             oldline=self.mplwidget.axes[0].lines[0]
