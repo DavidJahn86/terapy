@@ -186,7 +186,7 @@ class MyWindow(QtGui.QMainWindow):
         step=self.ui.dsbinterpolationStep.value()*1e-15        
         
         where=self.ui.cbwhichGraphs_windowing.currentIndex()        
-        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where),self.ui.le_newName_interpolation.text())
         
         #manipulate the temporary data
         tdata=tempItem.tdData
@@ -226,7 +226,7 @@ class MyWindow(QtGui.QMainWindow):
         where=self.ui.cbwhichGraphs_windowing.currentIndex()        
         no_zeros=self.ui.sbNumberZeros.value()
         
-        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where),self.ui.le_newName_padding.text())
         
         #manipulate the temporary data
         tdata=tempItem.tdData
@@ -267,8 +267,8 @@ class MyWindow(QtGui.QMainWindow):
         windowfunction=self.ui.cbwindowfunction.currentText()
         risingEdgelen=self.ui.dsb_risingEdge.value()*1e-12
         where=self.ui.cbwhichGraphs_windowing.currentIndex()        
-        
-        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+    
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where),self.ui.le_newName_windowing.text())
         
         #manipulate the temporary data
         tdata=tempItem.tdData
@@ -289,6 +289,7 @@ class MyWindow(QtGui.QMainWindow):
             self.insertTemporaryCopy()
             self.ui.preferences.hide()
         else:
+            #use the same name
             self.insertTemporaryCopy(self.ui.fileTree.topLevelItem(where))
             self.ui.preferences.hide()
             
@@ -303,7 +304,7 @@ class MyWindow(QtGui.QMainWindow):
         factor=self.ui.dsbAmplitudeFactor.value()
         where=self.ui.cbwhichGraphs.currentIndex()
         
-        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where))
+        tempItem=self.createTemporaryCopy(self.ui.fileTree.topLevelItem(where),self.ui.leNewName.text())
         
         #manipulate the temporary data
         tdata=tempItem.tdData
@@ -338,7 +339,7 @@ class MyWindow(QtGui.QMainWindow):
             root.removeChild(lastitem)
         self.ui.preferences.hide()       
     
-    def createTemporaryCopy(self,originalitem):
+    def createTemporaryCopy(self,originalitem,name):
         #check if last item is already a temporary item
         #temporary items are not added to combo box
         #temporary items are by default grey colored
@@ -349,7 +350,7 @@ class MyWindow(QtGui.QMainWindow):
             x.tdData=originalitem.tdData
             x.fdData=TeraData.FrequencyDomainData.fromTimeDomainData(originalitem.tdData)
             x.setCheckState(0,QtCore.Qt.Checked)
-            x.setText(1,originalitem.text(1))
+            x.setText(1,name)
             x.color= plt.cm.colors.colorConverter.to_rgba('0.75')
             col=QtGui.QColor(int(x.color[0]*255),int(x.color[1]*255),int(x.color[2]*255),int(x.color[3]*255))
             x.setBackgroundColor(0,col)        
@@ -361,25 +362,34 @@ class MyWindow(QtGui.QMainWindow):
             tempItem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
         return tempItem
     
-    def temporaryUpdate(self,tempItem,newtdData,newfdData=None):
-        tempItem.tdData=newtdData
-        if newfdData is None:        
-            tempItem.fdData=TeraData.FrequencyDomainData.fromTimeDomainData(newtdData)
+    def temporaryUpdate(self,tempItem,newdata,freqdata=False):
+        #if freqdata is true the newdata is a frequency dataset, else it is assumed
+        #to be a time domaindataset
+        if freqdata:
+            tempItem.fdData=newdata
+            tempItem.tdData=TeraData.TimeDomainData.fromFrequencyDomainData(newdata)
+        else:
+            tempItem.tdData=newdata
+            tempItem.fdData=TeraData.FrequencyDomainData.fromTimeDomainData(newdata)
+            
         self.doTdFdPlot(tempItem)
 
     def insertTemporaryCopy(self,originalItem=None):
         '''overwrites originalItem if given, else inserts a copy'''
         lastitem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
+        
         if originalItem is None:
+            # if no originalItem is defined, insert the temp item as new item to the tree view
             lastitem.color=plt.cm.brg(np.random.rand(1)[0])
             col=QtGui.QColor(int(lastitem.color[0]*255),int(lastitem.color[1]*255),int(lastitem.color[2]*255),int(lastitem.color[3]*255))
             lastitem.setBackgroundColor(0,col)
             lastitem.tempitem=False
-            lastitem.setText(1,"Copy of " + lastitem.text(1))
-            lastitem.tdData.setDataSetName("Copy of " + lastitem.text(1))
+            lastitem.tdData.setDataSetName(lastitem.text(1))
+            self.ui.cbwhichGraphs.addItem(lastitem.text(1))
             self.updateDetails(lastitem)
             self.doTdFdPlot(lastitem)
         else:
+            #if original item is defined, overwrite only the last data of the original item 
             originalItem.tdData=lastitem.tdData
             originalItem.fdData=lastitem.fdData
             self.updateDetails(originalItem)

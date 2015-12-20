@@ -133,7 +133,8 @@ class TimeDomainData():
     
     def averageTimeDomainDatas(timeDomainDatas):
         timeaxisarray=[tdd.getTimeAxisRef() for tdd in timeDomainDatas]
-        if not np.all((timeaxisarray-timeaxisarray[0])==0):
+        samelength=all(tdd.getSamplingPoints()==timeDomainDatas[0].getSamplingPoints() for tdd in timeDomainDatas)
+        if not samelength or not np.all((timeaxisarray-timeaxisarray[0])==0):
             print("Time axis manipulation neccessary")
             timeDomainDatas=TimeDomainData._bringToCommonTimeAxis(timeDomainDatas)
         
@@ -153,7 +154,7 @@ class TimeDomainData():
         #   => no equal frequency bins
         #b) time positions might not be equal
             
-        miss_points_max=10    
+        miss_points_max=100000 
         #check for missing datapoints, allowing 
         #not more than miss_points_max points to miss 
         all_lengthes=[]
@@ -338,6 +339,9 @@ class TimeDomainData():
         if windowlength_time>0:
             #check that N is not too large! needs a fix here
             N=int(windowlength_time/self.getTimeStep())
+            if 2*N>self.getSamplingPoints():
+                N=self.getSamplingPoints()/2
+                print("Window too large")
             w=np.blackman(N*2)
             w=np.hstack((w[:N],np.ones((self.getSamplingPoints()-N*2),),w[N:]))
         else:
