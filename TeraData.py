@@ -289,7 +289,11 @@ class TimeDomainData():
         return self.getTimeAxisRef()[np.argmax(self.getEfield())]
 
     def getPeakWidth(self):
-        return 0
+        efield=abs(self.getEfield())
+        mefield=np.amax(efield)
+        #take care, maybe peak resolution not enough... interpolation?
+        m=self.getTimeAxis()[efield>mefield/2]
+        return m[-1]-m[0]
 
     def getSamplingPoints(self):    
         return self.getTimeAxisRef().shape[0]
@@ -425,20 +429,20 @@ def outputInformation(tdData,fdData,filename,header=False):
     if header==True:
         headerstr='Name; Time Step; Peak Width; Peak Position; Max Efield; '
         headerstr+='Peak Position; TD SNR; Frequency bins; Bandwidth; FD SNR'
-        
+        myfile.write(headerstr+'\n')
     writestr=''
     writestr+=tdData.getDataSetName()+'; '
-    writestr+=tdData.getTimeStep()+'; '
-    writestr+=tdData.getPeakWidth()+'; '
-    writestr+=tdData.getPeakPosition()+'; '
-    writestr+=max(abs(tdData.getEfield()))+'; '
-    writestr+=tdData.getPeakPosition()+'; '
-    writestr+=max(tdData.getSNR()) +'; '
-    writestr+=fdData.getfbins() + '; '
-    writestr+=fdData.getBandwidth() + '; '
-    writestr+=max(fdData.getSNR()) + '; '
-    
-        
+    writestr+=str(tdData.getTimeStep())+'; '
+    writestr+=str(tdData.getPeakWidth())+'; '
+    writestr+=str(tdData.getPeakPosition())+'; '
+    writestr+=str(np.amax(abs(tdData.getEfield())))+'; '
+    writestr+=str(tdData.getPeakPosition())+'; '
+    writestr+=str(np.amax(tdData.getSNR())) +'; '
+    writestr+=str(fdData.getfbins()) + '; '
+    writestr+=str(fdData.getBandwidth()) + '; '
+    writestr+=str(np.amax(fdData.getSNR())) + '; '
+    myfile.write(writestr + '\n')
+    myfile.close()
         
         
     
@@ -485,7 +489,9 @@ class FrequencyDomainData():
             self.phase=np.unwrap(np.angle(self.spectrum))
     
     def plotme(self):
-        plt.plot(self.frequencies,20*np.log10(abs(self.spectrum)/max(abs(self.spectrum))))
+        plt.plot(self.frequencies/1e12,20*np.log10(abs(self.spectrum)/max(abs(self.spectrum))))
+        plt.xlim(0,7)
+        plt.ylim(-90,0)
         
     def getFrequencies(self):
         return np.copy(self.frequencies)
@@ -576,26 +582,24 @@ class FrequencyDomainData():
         phase=np.concatenate((phase[0]*one,phase,phase[-1]*one))
         return FrequencyDomainData(self.getFrequenciesRef(),spectrum,phase)
     
-    def getBandwidth(self,dbDistancetoNoise=15):
-        '''this function should return the lowest trustable and highest trustable
-        frequency, along with the resulting bandwidth'''
-        vals=self.getSNR()+dbDistancetoNoise
-        absval=20*np.log10(abs(self.getSpectrumRef()))
-        absval-=np.amax(absval)
-        
-#        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
-#        tfr=self.getfreqs()[ix]
-        tfr=[0,1]
-        return min(tfr),max(tfr)
+    def getBandwidth(self):
+        '''returns the bandwidth , evaluated, using the phase'''
+        #average for 100 GHz
+        N=int(100e9/self.getfbins())+1      
+        phase=np.convolve(self.getPhases(), np.ones((N,))/N)[(N-1):]
+        jumps=np.where(np.diff(np.sign(np.diff(phase))))[0]
+        freqs=self.getFrequenciesRef()[jumps]
+        return np.mean(freqs[0])
+     
 
     def getSNR(self):
         #returns the signal to noise ratio fast method
-        absval=20*np.log10(abs(self.getSpectrumRef()))
-        absval-=np.amax(absval)
+        norm=abs(self.getSpectrumRef())/np.amax(abs(self.getSpectrumRef()))
         freqs=self.getFrequenciesRef()
-        ix_freq=np.all([freqs>=3e12,freqs<8e12],axis=0)
-        SNR=np.mean(absval[ix_freq])
-        return SNR
+        ix_freq=np.all([freqs>=self.getBandwidth(),freqs<8e12],axis=0)
+        SNR=norm/np.mean(abs(norm[ix_freq]))
+        
+        return 20*np.log10(SNR)
 
     def getDynamicRange(self):
         '''Returns the Dynamic Range'''
@@ -738,4 +742,15 @@ class FrequencyDomainData():
 
         
 if __name__=="__main__":
-    test=importMarburgData(['Reference_0.txt'])
+    tdData=importMarburgData(['Reference_1.txt'])[0]
+    fdData=FrequencyDomainData.fromTimeDomainData(tdData)
+    plt.figure(1)
+    tdData.plotme()
+    plt.figure(2)
+    fdData.plotme()
+    plt.plot([0,10],[-np.amax(fdData.getSNR()),-np.amax(fdData.getSNR())])
+    plt.plot([fdData.getBandwidth()/1e12,fdData.getBandwidth()/1e12],[-100,0])
+    
+    #plt.figure(3)    
+    plt.plot(fdData.getFrequencies()/1e12,fdData.getPhases()/10)
+    plt.xlim(0,7)
