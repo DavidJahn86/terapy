@@ -14,6 +14,7 @@ class TimeDomainData():
     
     def fromFile(filename,fileformat):
         try:
+            str2float=lambda val: float(val.decode("utf-8").replace(',','.'))
             #if no Y_col is specified            
             if 'Y_col' in fileformat:
                 #import it right away
@@ -26,7 +27,6 @@ class TimeDomainData():
                                 
                 elif fileformat['dec_sep']==',':
                     #if the decimal separator is , do a replacement
-                    str2float=lambda val: float(val.replace(',','.'))
                     data=np.loadtxt(filename,
                                 converters={fileformat['time_col']:str2float,
                                             fileformat['X_col']:str2float,
@@ -47,7 +47,6 @@ class TimeDomainData():
                                 
                 elif fileformat['dec_sep']==',':
                     #if the decimal separator is , do a replacement
-                    str2float=lambda val: float(val.replace(',','.'))
                     data=np.loadtxt(filename,
                                 converters={fileformat['time_col']:str2float,
                                             fileformat['X_col']:str2float},
@@ -580,17 +579,23 @@ class FrequencyDomainData():
     def getBandwidth(self,dbDistancetoNoise=15):
         '''this function should return the lowest trustable and highest trustable
         frequency, along with the resulting bandwidth'''
+        vals=self.getSNR()+dbDistancetoNoise
+        absval=20*np.log10(abs(self.getSpectrumRef()))
+        absval-=np.amax(absval)
         
-#        absdata=-20*py.log10(self.getFAbs()/max(self.getFAbs()))
 #        ix=self.maxDR-dbDistancetoNoise>absdata #dangerous, due to sidelobes, there might be some high freq component!
 #        tfr=self.getfreqs()[ix]
         tfr=[0,1]
         return min(tfr),max(tfr)
 
     def getSNR(self):
-        #returns the signal to noise ratio
-        #abs(self.getSpectrumRef())/1e-5
-        return -20*np.ones((self.getFrequenciesRef().shape))
+        #returns the signal to noise ratio fast method
+        absval=20*np.log10(abs(self.getSpectrumRef()))
+        absval-=np.amax(absval)
+        freqs=self.getFrequenciesRef()
+        ix_freq=np.all([freqs>=3e12,freqs<8e12],axis=0)
+        SNR=np.mean(absval[ix_freq])
+        return SNR
 
     def getDynamicRange(self):
         '''Returns the Dynamic Range'''
