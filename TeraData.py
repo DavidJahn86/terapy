@@ -1,8 +1,10 @@
 import numpy as np
 import glob
+from matplotlib.pyplot import plt
 from scipy.interpolate import interp1d
 import scipy.signal as signal
 from uncertainties import unumpy
+
 
 class TimeDomainData():
     '''A simple data class for Data acquired by a THz-TD Spectrometer
@@ -462,7 +464,7 @@ class FrequencyDomainData():
             self.phase=np.unwrap(np.angle(self.spectrum))
     
     def plotme(self):
-        plt.plot(self.frequencies,20*np.log10(abs(self.spectrum)))
+        plt.plot(self.frequencies,20*np.log10(abs(self.spectrum)/max(abs(self.spectrum))))
         
     def getFrequencies(self):
         return np.copy(self.frequencies)
