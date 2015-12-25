@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import glob
 from scipy.interpolate import interp1d
 import scipy.signal as signal
 from uncertainties import unumpy
+
 
 class TimeDomainData():
     '''A simple data class for Data acquired by a THz-TD Spectrometer
@@ -132,7 +134,8 @@ class TimeDomainData():
     
     def averageTimeDomainDatas(timeDomainDatas):
         timeaxisarray=[tdd.getTimeAxisRef() for tdd in timeDomainDatas]
-        if not np.all((timeaxisarray-timeaxisarray[0])==0):
+        samelength=all(tdd.getSamplingPoints()==timeDomainDatas[0].getSamplingPoints() for tdd in timeDomainDatas)
+        if not samelength or not np.all((timeaxisarray-timeaxisarray[0])==0):
             print("Time axis manipulation neccessary")
             timeDomainDatas=TimeDomainData._bringToCommonTimeAxis(timeDomainDatas)
         
@@ -152,7 +155,7 @@ class TimeDomainData():
         #   => no equal frequency bins
         #b) time positions might not be equal
             
-        miss_points_max=10    
+        miss_points_max=100000 
         #check for missing datapoints, allowing 
         #not more than miss_points_max points to miss 
         all_lengthes=[]
@@ -337,6 +340,9 @@ class TimeDomainData():
         if windowlength_time>0:
             #check that N is not too large! needs a fix here
             N=int(windowlength_time/self.getTimeStep())
+            if 2*N>self.getSamplingPoints():
+                N=self.getSamplingPoints()/2
+                print("Window too large")
             w=np.blackman(N*2)
             w=np.hstack((w[:N],np.ones((self.getSamplingPoints()-N*2),),w[N:]))
         else:
@@ -433,7 +439,19 @@ class FrequencyDomainData():
         spectrum=np.fft.rfft(tdd.getEfield())
         phase=np.unwrap(np.angle(spectrum)) #
         return FrequencyDomainData(frequencies,spectrum,phase)
+    
+    def divideTwoSpectra(fdNumerator,fdDenominator):
+        '''Calculate the Transferfunction fdNumerator/fdDenominator
+            In our context, most of the time fdNumerator=Sample Spectrum and fdDenominator=ReferenceSpectrum
+        '''
+        if not np.all((fdNumerator.getFrequenciesRef()-fdDenominator.getFrequenciesRef())==0):
+            print("Frequency axis of the two inputs are not equal, try to fix")            
+            return 0
         
+        spectrum=fdNumerator.getSpectrum()/fdDenominator.getSpectrum()
+        phase=fdNumerator.getPhases()-fdDenominator.getPhases()
+        return FrequencyDomainData(fdNumerator.getFrequencies(),spectrum,phase)
+    
     def __init__(self,frequencies,spectrum,phase=None):
 
         self.frequencies=np.copy(frequencies)
@@ -445,7 +463,7 @@ class FrequencyDomainData():
             self.phase=np.unwrap(np.angle(self.spectrum))
     
     def plotme(self):
-        plt.plot(self.frequencies,20*np.log10(abs(self.spectrum)))
+        plt.plot(self.frequencies,20*np.log10(abs(self.spectrum)/max(abs(self.spectrum))))
         
     def getFrequencies(self):
         return np.copy(self.frequencies)

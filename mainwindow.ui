@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1247</width>
-    <height>587</height>
+    <height>617</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -380,7 +380,7 @@
                      <item row="3" column="0">
                       <widget class="QLabel" name="label_7">
                        <property name="text">
-                        <string>Number of Zeros</string>
+                        <string>Zeropadd </string>
                        </property>
                       </widget>
                      </item>
@@ -1022,7 +1022,7 @@
      <x>0</x>
      <y>0</y>
      <width>1247</width>
-     <height>25</height>
+     <height>31</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
