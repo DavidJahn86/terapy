@@ -1,6 +1,6 @@
 import numpy as np
 import glob
-from matplotlib.pyplot import plt
+import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import scipy.signal as signal
 from uncertainties import unumpy
@@ -421,6 +421,28 @@ def importINRIMData(filenames):
             'skiprows':0}    
     return TimeDomainData.importMultipleFiles(filenames,params)
 
+def outputInformation(tdData,fdData,filename,header=False):
+    myfile=open(filename,'a')
+    if header==True:
+        headerstr='Name; Time Step; Peak Width; Peak Position; Max Efield; '
+        headerstr+='Peak Position; TD SNR; Frequency bins; Bandwidth; FD SNR'
+        
+    writestr=''
+    writestr+=tdData.getDataSetName()+'; '
+    writestr+=tdData.getTimeStep()+'; '
+    writestr+=tdData.getPeakWidth()+'; '
+    writestr+=tdData.getPeakPosition()+'; '
+    writestr+=max(abs(tdData.getEfield()))+'; '
+    writestr+=tdData.getPeakPosition()+'; '
+    writestr+=max(tdData.getSNR()) +'; '
+    writestr+=fdData.getfbins() + '; '
+    writestr+=fdData.getBandwidth() + '; '
+    writestr+=max(fdData.getSNR()) + '; '
+    
+        
+        
+        
+    
 
 class FrequencyDomainData():
     '''
@@ -710,5 +732,5 @@ class FrequencyDomainData():
 #        #(peakfreqs[1]-peakfreqs[0])
 
         
-#if __name__=="__main__":
-#    test=importINRIMData(['2014-01-30_no-sample_step.dat'])
+if __name__=="__main__":
+    test=importMarburgData(['Reference_0.txt'])
