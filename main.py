@@ -9,7 +9,6 @@ from uncertainties import unumpy
 from os import path
 import matplotlib.gridspec as gridspec
 import glob
-import copy
 
 from thzTreeWidgetItem import THzTreeWidgetItem
 from formatdialog import FormatDialog
@@ -345,6 +344,7 @@ class MyWindow(QtGui.QMainWindow):
         #temporary items are by default grey colored
         if not self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1).tempitem:
             x=THzTreeWidgetItem()
+            
             x.refreshCanvas=self.refreshCanvas
             x.setFlags(x.flags() | QtCore.Qt.ItemIsEditable)
             x.tdData=originalitem.tdData
@@ -358,6 +358,7 @@ class MyWindow(QtGui.QMainWindow):
             self.doTdFdPlot(x)
             self.ui.fileTree.addTopLevelItem(x)
             tempItem=x
+            tempItem.setHidden(True)
         else:
             tempItem=self.ui.fileTree.topLevelItem(self.ui.fileTree.topLevelItemCount()-1)
         return tempItem
@@ -384,8 +385,9 @@ class MyWindow(QtGui.QMainWindow):
             col=QtGui.QColor(int(lastitem.color[0]*255),int(lastitem.color[1]*255),int(lastitem.color[2]*255),int(lastitem.color[3]*255))
             lastitem.setBackgroundColor(0,col)
             lastitem.tempitem=False
-            lastitem.tdData.setDataSetName(lastitem.text(1))
-            self.ui.cbwhichGraphs.addItem(lastitem.text(1))
+            lastitem.setHidden(False)
+            lastitem.setText(1,"Copy of " + lastitem.text(1))
+            lastitem.tdData.setDataSetName("Copy of " + lastitem.text(1))
             self.updateDetails(lastitem)
             self.doTdFdPlot(lastitem)
         else:
@@ -425,6 +427,7 @@ class MyWindow(QtGui.QMainWindow):
                 self.ChildMenu.exec_(self.ui.fileTree.mapToGlobal(point))
         
     def initializeSpectrumCanvas(self):
+        
         gs = gridspec.GridSpec(2, 2)
         
         #initialize the three main plots
@@ -632,7 +635,7 @@ class MyWindow(QtGui.QMainWindow):
         #plot name not needed right now
         if column==1:
             
-            self.ui.cbwhichGraphs.setItemText(self.ui.fileTree.selectedIndexes()[0].row()+2,item.text(1))
+            #self.ui.cbwhichGraphs.setItemText(self.ui.fileTree.selectedIndexes()[0].row()+2,item.text(1))
             item.tdline[0].set_label(item.text(1))
             item.fdlineabs[0].set_label(item.text(1))
             item.fdlinephase[0].set_label(item.text(1))
