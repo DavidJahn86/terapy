@@ -585,10 +585,13 @@ class FrequencyDomainData():
     def getBandwidth(self):
         '''returns the bandwidth , evaluated, using the phase'''
         #average for 100 GHz
-        N=int(100e9/self.getfbins())+1      
-        phase=np.convolve(self.getPhases(), np.ones((N,))/N)[(N-1):]
+        N=int(100e9/self.getfbins())+1
+        freqs=self.getFrequenciesRef()
+        ix_f=freqs>200e9
+        freqs=freqs[ix_f]
+        phase=np.convolve(self.getPhases()[ix_f], np.ones((N,))/N)[(N-1):]
         jumps=np.where(np.diff(np.sign(np.diff(phase))))[0]
-        freqs=self.getFrequenciesRef()[jumps]
+        freqs=freqs[jumps]
         return np.mean(freqs[0])
      
 
