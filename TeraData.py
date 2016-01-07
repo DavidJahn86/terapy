@@ -367,7 +367,9 @@ class TimeDomainData():
   
     def plotme(self):
         '''only for testing'''
-        plt.plot(self.getTimeAxisRef(),self.getEfield())
+        plt.plot(self.getTimeAxisRef()*1e12,self.getEfield())
+        plt.xlabel('Time (ps)')
+        plt.ylabel('Amplitude (arb. units)')
         
     def zeroPaddToTargetFrequencyResolution(self,fbins,paddmode='zero',where='end'):
         '''as many zeros are added as need to achieve a frequency resolution of fbins'''
@@ -492,6 +494,8 @@ class FrequencyDomainData():
         plt.plot(self.frequencies/1e12,20*np.log10(abs(self.spectrum)/max(abs(self.spectrum))))
         plt.xlim(0,7)
         plt.ylim(-90,0)
+        plt.xlabel('Frequency (THz)')
+        plt.ylabel('Normalized Power (dB)')
         
     def getFrequencies(self):
         return np.copy(self.frequencies)
