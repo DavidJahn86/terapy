@@ -12,7 +12,7 @@ class TimeDomainData():
         Should implement the correct add
     '''
     
-    def fromFile(filename,fileformat):
+    def fromFile(filename,fileformat,propagateUncertainty=False):
         try:
             str2float=lambda val: float(val.decode("utf-8").replace(',','.'))
             #if no Y_col is specified            
@@ -72,9 +72,11 @@ class TimeDomainData():
         if np.argmax(efield)>len(efield)/2:
             #assume now that the data must get flipped, this must become optional
             efield=efield[::-1]
-        
-        sigma_BG=TimeDomainData.estimateBGNoise(timeaxis,efield)
-        return TimeDomainData(timeaxis,efield,sigma_BG,filename)
+        if propagateUncertainty:
+            sigma_BG=TimeDomainData.estimateBGNoise(timeaxis,efield)
+        else:
+            sigma_BG=None
+        return TimeDomainData(timeaxis,efield,sigma_BG,filename,propagateUncertainty)
     
     def _rotateToXChannel(XChannel,YChannel):
         #this function should remove all signal from Y-Channel
@@ -132,7 +134,7 @@ class TimeDomainData():
         std_BGNoise=np.std(noise)
         return std_BGNoise
     
-    def averageTimeDomainDatas(timeDomainDatas):
+    def averageTimeDomainDatas(timeDomainDatas,propagateUncertainty=False):
         timeaxisarray=[tdd.getTimeAxisRef() for tdd in timeDomainDatas]
         samelength=all(tdd.getSamplingPoints()==timeDomainDatas[0].getSamplingPoints() for tdd in timeDomainDatas)
         if not samelength or not np.all((timeaxisarray-timeaxisarray[0])==0):
@@ -147,7 +149,7 @@ class TimeDomainData():
         for tdd in timeDomainDatas:
             name+=', ' + tdd.getDataSetName()
         
-        return TimeDomainData(timeaxisarray[0],av,std,name) 
+        return TimeDomainData(timeaxisarray[0],av,std,name,propagateUncertainty) 
             
     def _bringToCommonTimeAxis(timeDomainDatas,force=True):
         #What can happen: 
@@ -155,7 +157,7 @@ class TimeDomainData():
         #   => no equal frequency bins
         #b) time positions might not be equal
             
-        miss_points_max=100000 
+        miss_points_max=1000
         #check for missing datapoints, allowing 
         #not more than miss_points_max points to miss 
         all_lengthes=[]
@@ -201,7 +203,7 @@ class TimeDomainData():
             for tdd,peak in zip(timeDomainDatas,peak_pos):
                 newTimeAxis=tdd.getTimeAxis()-(peak-mp)
                 
-                shiftedDatas.append(TimeDomainData(newTimeAxis,tdd.getEfield(),tdd.getUncertainty(),tdd.getDataSetName()))
+                shiftedDatas.append(TimeDomainData(newTimeAxis,tdd.getEfield(),tdd.getUncertainty(),tdd.getDataSetName(),tdd.uncertaintyEnabled))
             
             return shiftedDatas
         else:
@@ -231,23 +233,48 @@ class TimeDomainData():
         
         return tempTDDatas
             
-    def importMultipleFiles(fns,fileformats):
+    def importMultipleFiles(fns,fileformats,propagateUncertainty=False):
         datas=[]        
         for fn in fns:
-            datas.append(TimeDomainData.fromFile(fn,fileformats))
+            datas.append(TimeDomainData.fromFile(fn,fileformats,propagateUncertainty))
             
         av_data=TimeDomainData._preProcessData(datas)
         
         return av_data
         
-    def __init__(self,timeaxis,efield,uncertainty=None,datasetname=''):
+    def __init__(self,timeaxis,efield,uncertainty=None,datasetname='',propagateUncertainty=False):
         
         self.timeaxis=np.copy(timeaxis)
-        if uncertainty is None:
-            uncertainty=TimeDomainData.estimateBGNoise(timeaxis,efield)
-                    
-        self.uefield=unumpy.uarray(efield,uncertainty)
+        if uncertainty==None:
+            self.uncertainty=TimeDomainData.estimateBGNoise(timeaxis,efield)
+        else:
+            self.uncertainty=uncertainty
+        
+        if propagateUncertainty:              
+            
+            self.efield=unumpy.uarray(efield,self.uncertainty)
+        else:
+            self.efield=efield
+
+        self.uncertaintyEnabled=propagateUncertainty
         self.datasetname=datasetname
+
+    def enableUncertaintyPropagation(self):
+        #if not isinstance(self.efield,unumpy.uarray):
+        if self.uncertaintyEnabled==False:        
+            #should be something already
+            #if self.uncertainty==None:
+            #    self.uncertainty=self.getSigmaBG()
+            
+            self.efield=unumpy.uarray(self.efield,self.uncertainty)
+            self.uncertaintyEnabled=True
+            
+    def disableUncertaintyPropagation(self):
+        #if isinstance(self.efield,unumpy.uarray):
+        if self.uncertaintyEnabled==True:        
+            self.uncertainty=unumpy.std_devs(self.efield)
+            self.efield=unumpy.nominal_values(self.efield)
+            self.uncertaintyEnabled=False
 
     def getDataSetName(self):
         return self.datasetname
@@ -262,7 +289,7 @@ class TimeDomainData():
         return Emax/noise
         
     def getEfield(self):
-        return unumpy.nominal_values(self.uefield)
+        return unumpy.nominal_values(self.efield)
 
     def getFirstPuls(self,after=5e-12):
         '''returns only the first pulse'''
@@ -282,7 +309,7 @@ class TimeDomainData():
         intpdata=interp1d(self.getTimeAxisRef(),np.asarray([self.getEfield(),self.getUncertainty()]),axis=1,kind=tkind)
         timeaxis=np.linspace(mint,maxt,desiredLength)
         longerData=intpdata(timeaxis)
-        return TimeDomainData(timeaxis,longerData[0,:],longerData[1,:],self.getDataSetName())
+        return TimeDomainData(timeaxis,longerData[0,:],longerData[1,:],self.getDataSetName(),self.uncertaintyEnabled)
 
     def getPeakPosition(self):
         '''gives the time, at which the signal is maximal'''
@@ -299,7 +326,7 @@ class TimeDomainData():
         return self.getTimeAxisRef().shape[0]
   
     def getSigmaBG(self):
-        return TimeDomainData.estimateBGNoise(self.timeaxis,unumpy.nominal_values(self.uefield))
+        return TimeDomainData.estimateBGNoise(self.timeaxis,unumpy.nominal_values(self.efield))
 
     def getSigmaRepeatability(self):
         pass
@@ -320,21 +347,15 @@ class TimeDomainData():
     def getTimeSlice(self,tmin,tmax):
         newtaxis=self.getTimeAxis()
         ix=np.all([newtaxis>=tmin,newtaxis<tmax],axis=0)
-        return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.getDataSetName())
+        return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.getDataSetName(),self.uncertaintyEnabled)
 
     def getTimeWindowLength(self):
         #returns thetime from the signal peak to the end of the measurement
         peak=self.getPeakPosition()
         return abs(self.getTimeAxisRef()[-1]-peak)
         
-    def getUEfield(self):
-        return np.copy(self.uefield)
-        
-    def getUEfieldRef(self):
-        return self.uefield
-
     def getUncertainty(self):
-        return unumpy.std_devs(self.uefield)
+        return unumpy.std_devs(self.efield)
     
     def getWindowedData(self,windowlength_time=-1,windowtype='blackman'):
         '''windowlength_time sets the time of rising and falling of the window before 1 is reached, a negative time means no flat top
@@ -352,18 +373,18 @@ class TimeDomainData():
         else:
             w=np.blackman(self.getSamplingPoints())
         
-        windowedData=self.getUEfield()
+        windowedData=self.getEfield()
         windowedData*=w
             
-        return TimeDomainData(self.getTimeAxisRef(),unumpy.nominal_values(windowedData),unumpy.std_devs(windowedData),datasetname=self.getDataSetName())
+        return TimeDomainData(self.getTimeAxisRef(),unumpy.nominal_values(windowedData),unumpy.std_devs(windowedData),self.getDataSetName(),self.uncertaintyEnabled)
         
     def _removeLinearDrift(self):
         '''Removes a linear drift from the measurement data
         So far no uncertainty propagation ?
         '''
-        newfield=signal.detrend(unumpy.nominal_values(self.uefield))
+        newfield=signal.detrend(unumpy.nominal_values(self.efield))
             
-        return TimeDomainData(self.getTimeAxisRef(),newfield,self.getUncertainty(),self.getDataSetName())
+        return TimeDomainData(self.getTimeAxisRef(),newfield,self.getUncertainty(),self.getDataSetName(),self.uncertaintyEnabled)
   
     def plotme(self):
         '''only for testing'''
@@ -396,17 +417,24 @@ class TimeDomainData():
             
         timevec=self.getTimeAxis()
         
+        
         if where=='end':
             #timeaxis:
             newtimes=np.linspace(timevec[-1],timevec[-1]+desiredLength*self.getTimeStep(),desiredLength)
             timevec=np.concatenate((timevec,newtimes))
-            newuefield=np.concatenate((self.getUEfield(),unumpy.uarray(paddvec,self.getSigmaBG())))
+            if self.uncertaintyEnabled:
+                newefield=np.concatenate((self.getEfield(),unumpy.uarray(paddvec,self.getSigmaBG())))
+            else:
+                newefield=np.concatenate((self.getEfield(),paddvec))
         else:
+
             newtimes=np.linspace(timevec[0]-(desiredLength+1)*self.getTimeStep(),timevec[0],desiredLength)
             timevec=np.concatenate((newtimes,paddvec))
-            newuefield=np.concatenate((unumpy.uarray(paddvec,self.getSigmaBG()),self.getUEfield()))
-        
-        return TimeDomainData(timevec,unumpy.nominal_values(newuefield),unumpy.std_devs(newuefield),self.getDataSetName())
+            if self.uncertaintyEnabled:
+                newefield=np.concatenate((unumpy.uarray(paddvec,self.getSigmaBG()),self.getEfield()))
+            else:
+                newefield=np.concatenate(paddvec,self.getEfield())
+        return TimeDomainData(timevec,unumpy.nominal_values(newefield),unumpy.std_devs(newefield),self.getDataSetName(),self.uncertaintyEnabled)
 
 def importMarburgData(filenames):       
     params={'time_factor':1,
@@ -749,7 +777,7 @@ class FrequencyDomainData():
 
         
 if __name__=="__main__":
-    tdData=importMarburgData(['Reference_1.txt'])[0]
+    tdData=importMarburgData(['20150706_130003_Reference_0_X0.00Y0.00Z-2400.00_0of3.00.txt'])[0]
     fdData=FrequencyDomainData.fromTimeDomainData(tdData)
     plt.figure(1)
     tdData.plotme()
