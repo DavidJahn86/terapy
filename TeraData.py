@@ -657,30 +657,29 @@ class FrequencyDomainData():
         return -20*np.ones((self.getFrequenciesRef().shape))
 
 
-#    def getEtalonSpacing(self):
-#        '''this should return the frequency of the Etalon
-#        '''
-#    
-#        #how to find a stable range!
-#        bw=self.getBandwidth()
-#        rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],2.1e12))  
-#        
-#        #need to interpolate data!
-#        oldfreqs=rdata[:,0]
-#        intpdata=interp1d(oldfreqs,rdata[:,3],'cubic')
-#        
-#        fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
-#        absnew=intpdata(fnew)
-#        #find minimia and maxima        
-#        ixmaxima=signal.argrelmax(absnew)[0]
-#        ixminima=signal.argrelmin(absnew)[0]
-#        
-#        fmaxima=py.mean(py.diff(fnew[ixmaxima]))
-#        fminima=py.mean(py.diff(fnew[ixminima]))
-#        #calculate etalon frequencies
-#        df=(fmaxima+fminima)*0.5 #the etalon frequencies
-#        print(str(df/1e9) + " GHz estimated etalon frequency")
-#        return df
+    def getEtalonSpacing(self,fmin=200e9,fmax=1e12):
+        '''this should return the frequency of the Etalon
+        '''
+    
+        #how to find a stable range!
+        rdata=self.getCroppedData(fmin,fmax)  
+        
+        #need to interpolate data!
+        oldfreqs=rdata.getFrequenciesRef()
+        intpdata=interp1d(oldfreqs,abs(rdata.getSpectrumRef()),'cubic')
+        
+        fnew=np.arange(min(oldfreqs),max(oldfreqs),0.1e9)
+        absnew=intpdata(fnew)
+        #find minimia and maxima        
+        ixmaxima=signal.argrelmax(absnew)[0]
+        ixminima=signal.argrelmin(absnew)[0]
+        
+        fmaxima=np.mean(np.diff(fnew[ixmaxima]))
+        fminima=np.mean(np.diff(fnew[ixminima]))
+        #calculate etalon frequencies
+        df=(fmaxima+fminima)*0.5 #the etalon frequencies
+        print(str(df/1e9) + " GHz estimated etalon frequency")
+        return df
 
 
 
