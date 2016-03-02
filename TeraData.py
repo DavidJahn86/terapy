@@ -121,7 +121,8 @@ class TimeDomainData():
             ix_max=np.argmax(efield)
             ix_min=np.argmin(efield)
             earlier=min(ix_max,ix_min)
-                #take only the first nts part            
+                #take only the first nts part
+            
             endtime=timeaxis[int(earlier/ratio)]
         else:
             endtime=starttime+timePreceedingSignal
@@ -142,6 +143,7 @@ class TimeDomainData():
             timeDomainDatas=TimeDomainData._bringToCommonTimeAxis(timeDomainDatas)
         
         #datas have same time axis, no interpolation needed
+        print(timeDomainDatas)
         efields=[tdd.getEfield() for tdd in timeDomainDatas]
         av=np.average(efields,axis=0)
         std=np.std(efields,axis=0,ddof=1)/np.sqrt(len(timeDomainDatas))
@@ -246,7 +248,7 @@ class TimeDomainData():
         
         self.timeaxis=np.copy(timeaxis)
         if uncertainty==None:
-            self.uncertainty=TimeDomainData.estimateBGNoise(timeaxis,efield)
+            self.uncertainty=0#TimeDomainData.estimateBGNoise(timeaxis,efield)
         else:
             self.uncertainty=uncertainty
         
@@ -487,12 +489,15 @@ class FrequencyDomainData():
     FMIN=0      #minimal kept frequency
     FMAX=-1     #maximal kept frequency
     
-    def fromTimeDomainData(tdd):
+    def fromTimeDomainData(tdd,freqresolution=0):
         '''creates a FrequencyDomainData object from a timedomaindata
         '''
-        N=tdd.getSamplingPoints()
+        if freqresolution<=0:
+            N=tdd.getSamplingPoints()
+        else:
+            N=int(1/tdd.getTimeStep()/freqresolution)
         frequencies=np.fft.rfftfreq(N,tdd.getTimeStep())
-        spectrum=np.fft.rfft(tdd.getEfield())
+        spectrum=np.fft.rfft(tdd.getEfield(),N)
         phase=np.unwrap(np.angle(spectrum)) #
         return FrequencyDomainData(frequencies,spectrum,phase)
     
@@ -519,7 +524,7 @@ class FrequencyDomainData():
             self.phase=np.unwrap(np.angle(self.spectrum))
     
     def plotme(self):
-        plt.plot(self.frequencies/1e12,20*np.log10(abs(self.spectrum)/max(abs(self.spectrum))))
+        plt.plot(self.frequencies/1e12,self.getNormalizedSpectrum())
         plt.xlim(0,7)
         plt.ylim(-90,0)
         plt.xlabel('Frequency (THz)')
@@ -533,7 +538,10 @@ class FrequencyDomainData():
         
     def getSpectrum(self):
         return np.copy(self.spectrum)
-        
+    
+    def getNormalizedSpectrum(self):
+        return 20*np.log10(abs(self.spectrum)/max(abs(self.spectrum)))
+    
     def getSpectrumRef(self):
         return self.spectrum
         
@@ -777,7 +785,7 @@ class FrequencyDomainData():
 
         
 if __name__=="__main__":
-    tdData=importMarburgData(['20150706_130003_Reference_0_X0.00Y0.00Z-2400.00_0of3.00.txt'])[0]
+    tdData=importMarburgData(['20160209_185835__X0.00Y0.00Z0.00_0of5.00.txt'])[0]
     fdData=FrequencyDomainData.fromTimeDomainData(tdData)
     plt.figure(1)
     tdData.plotme()

@@ -92,16 +92,16 @@ class MyWindow(QtGui.QMainWindow):
         self.ChildMenu.addAction(self.removeItemAction)
          
         #for testing:
-        params={'time_factor':1,
-            'time_col':0,
-            'X_col':1,
-            'Y_col':2,
-            'dec_sep':'.',
-            'skiprows':0}
-        files=glob.glob(r'C:\Users\david\Documents\messdaten\Ref*.txt')
-        tdData=TeraData.TimeDomainData.importMultipleFiles(files,params)
-        tdData.setDataSetName('test')
-        x=self.fillTree('test',tdData)          
+     #   params={'time_factor':1,
+      #      'time_col':0,
+       #     'X_col':1,
+        #    'Y_col':2,
+         #   'dec_sep':'.',
+          #  'skiprows':0}
+        #files=glob.glob(r'C:\Users\david\Documents\messdaten\Ref*.txt')
+        #tdData=TeraData.TimeDomainData.importMultipleFiles(files,params)
+        #tdData.setDataSetName('test')
+        #x=self.fillTree('test',tdData)          
          
         self.show()
         
@@ -670,7 +670,7 @@ class MyWindow(QtGui.QMainWindow):
         self.refreshCanvas()
         
     def updateDetails(self,thztreeitem):
-        d=thztreeitem.fdData.getBandwidth()
+        
         thztreeitem.setText(2,'dt='+'{:3.2f}'.format(thztreeitem.tdData.getTimeStep()*1e15) + 'fs' +'\n'
                                 'Pulsewidth=' + '{:3.2f}'.format(thztreeitem.tdData.getPeakWidth()*1e12) + 'ps')
         thztreeitem.setToolTip(2,'Pulse Position: ' + '{:3.3f}'.format(thztreeitem.tdData.getPeakPosition()*1e12) + ' ps\n'+ 
@@ -678,7 +678,7 @@ class MyWindow(QtGui.QMainWindow):
                                 'TimeWindowLength=' + '{:3.2f}'.format((thztreeitem.tdData.getTimeAxisRef()[-1]-thztreeitem.tdData.getTimeAxisRef()[0])*1e12)+'Ps')
         
         thztreeitem.setText(3,'df=' +'{:3.2f}'.format(thztreeitem.fdData.getfbins()/1e9) + 'GHz' +'\n'
-                                'Bandwidth='+'{:3.1f}'.format((d[1]-d[0])/1e12) + 'THz')
+                                'Bandwidth='+'{:3.1f}'.format(thztreeitem.fdData.getBandwidth()/1e12) + 'THz')
     
     def doTdFdPlot(self,thztreeitem):
         #in case no color yet defined
