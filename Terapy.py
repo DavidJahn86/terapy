@@ -8,10 +8,7 @@ import matplotlib.pyplot as plt
 import TeraData as TD
 import glob
 
-
-
 n_0=1.00027-0.0000j
-
 
 def getThicknessEstimateDavid(H,fmin=200e9,fmax=1e12):
     '''
@@ -70,7 +67,18 @@ def calculateInits(H,l):
 
     return n,alpha
 
-def calculaten(H,l):
+def plotInits(H,l):
+    #plots the initial conditions
+    inits=calculateInits(H,l)
+    plt.title('Initial Conditions')
+    plt.plot(H.getFrequenciesRef()/1e9,inits[0])
+    plt.plot(H.getFrequenciesRef()/1e9,-inits[1])
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('optical constant value')
+    plt.legend((r'$n_{real}$',r'$n_{imag}$'))
+    
+    
+def calculaten(H,l,echos):
     #this calculates n for a given transferfunction H and a given thickness l
 
     #calculate the initial values
@@ -79,12 +87,14 @@ def calculaten(H,l):
     res=[] #the array of refractive index
     vals=[] # the array of error function values
     bnds=((1,None),(0,None)) #not used at the moment, with SLSQP bnds can be introduced
-    nums=len(H.getFrequenciesRef())
+    freqs=H.getFrequenciesRef()
+    spec=H.getSpectrumRef()
+    nums=len(freqs)
     #minimize the deviation of H_theory to H_measured for each frequency
     for i in range(nums):
 #            t=minimize(self.error_func,[inits[0,i],inits[1,i]],args=(H[i,:2],l), method='SLSQP',\
 #            bounds=bnds, options={'ftol':1e-9,'maxiter':2000, 'disp': False})
-        t=minimize(error_func,[inits[0,i],inits[1,i]],args=(H,l), method='Nelder-Mead',
+        t=minimize(error_func,[inits[0,i],inits[1,i]],args=(freqs[i],spec[i],l,echos), method='Nelder-Mead',
         options={'xtol': 1e-6,'disp':False})
         res.append(t.x[0]-1j*t.x[1])
         vals.append(t.fun)
@@ -92,291 +102,311 @@ def calculaten(H,l):
     #self.n is a 5xlengthf array, frequency,n_real,n_imag,n_smoothed_real,n_smoothed_imag
     return n
 
-def error_func(n,H,l):
+def error_func(n,f,spectrum,l,echos):
     #the quadratic deviation of Htheroy and Hmeasuered, used for finding n
-    H_t=H_theory(H.getFrequenciesRef(),n,l)
-    return abs(H_t-H.getSpectrumRef())**2
+    H_t=H_theory(f,n,l,echos)
+    return abs(H_t-spectrum)**2
     
-def H_theory(freq,n,l):
+def H_theory(freq,n,l,echos):
     #calculate the theoretic transfer function, so far only one medium!
+    
     nc=n[0]-1j*n[1]
     r_as=(n_0-nc)/(n_0+nc)
    
     FPE=0
     P=lambda tn: np.exp(-1j*l*freq*2*np.pi*tn/c)
-    for sumk in range(1,self.no_echos):
+    for sumk in range(1,echos):
         FPE+=((r_as**2)*(P(nc)**2))**sumk
     
-    H=4*self.n_0*nc/(nc+self.n_0)**2*P((nc-self.n_0))*(1+FPE)
+    H=4*n_0*nc/(nc+n_0)**2*P((nc-n_0))*(1+FPE)
     return H
 
-class teralyz():
-    '''Finds the optical constants
-    this class implements the solver, i.e. the length finding algorithm on the measurement
-    data
-    '''
-    #refractive index of air
-    n_0=1.00027-0.0000j
-
-    def __init__(self,reference,sample,thickness=0,fres=0):
-        '''calculates the refractive index of a sample single layer so far
-        
-        reference: timeDomain data of the reference measurement
-        sample: timeDomain data of the sample measurement        
-        thickness: measured thickness of the sample
-        Preprocessing on timedomain data should be done before
-        fres: Frequency resolution of refractive indices, achieved by zero-padding
-        '''
-        self.tdref=reference
-        self.tdsam=sample
-        self.fdref=TD.FrequencyDomainData.fromTimeDomainData(self.tdref)
-        self.fdsam=TD.FrequencyDomainData.fromTimeDomainData(self.tdsam)
-
-        self.H=TD.FrequencyDomainData.divideTwoSpectra(self.fdsam,self.fdref)
-        self.H_first=self.getHFirstPuls()
-
-        #just to have a first estimate
-        l,n=self.getThicknessEstimateDavid()
-        self.no_echos=self.getNumberofEchos(n,l)
-        
-        self.outfilename=self.getFilenameSuggestion()
-        
-        #H of only the first pulse        
-        #self.H_firstPuls=self.getHFirstPuls()
-        
-
-        #its always better to provide a thickness    
-        #if thickness==None:
-        #    self.userthickness=self.l_estimated
-        #else:                 
-        #    self.userthickness=thickness
-       
-        #calculate an estimated n from the time domain shift of the pulses
-        #self.n_estimated_user=self.nestimatedTD(measurementdata.fdsam._tdData,measurementdata.fdref._tdData)
-        #use as the "optimal" thickness the thickness provided by the user, as a first guess
-        #self.l_opt=self.userthickness
-        #set the found n to zero
-        #self.n=0
-        #output some information
-        #print("A priori estimated Width: " + str(l*1e6))
-        #print("A priori estimated n: " + str(n))
-        #calculate the number of expected fabry-pero echos
-        #self.no_echos=self.calculate_no_echos(measurementdata.fdsam._tdData)
-        #get a suggestion for the filename
-        #self.outfilename=self.getFilenameSuggestion()
-
-        
-
- 
-        
-
-
-        
-    def doCalculation(self,bool_findl=1,n_SVMAFS=5,bool_silent=0):
-        #this function does the complete calculation
-        #bandwidth
-        bw=self.H.getBandwidth()
-        #crop data
-        self.H.manipulateFDData(-1,[bw[0]+50e9,bw[1]-200e9])
-        #if l_opt shouldn't be calculated used bool_findl=False
-        if bool_findl:
-            self.l_opt=self.findLintelli()
-
-        print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(self.l_opt*1e6) + ' micro m ' + '\033[0m')
-
-        #calculate n for the given l_opt
-        n=self.calculaten(self.H.fdData,self.l_opt)
-        n_smoothed=n
-        i=0
-        
-        #smooth it with SVMAF
-        while i<n_SVMAFS:
-            n_smoothed=self.SVMAF(self.H.getfreqs(),n_smoothed,self.l_opt)
-            i+=1
-
-        self.n=np.column_stack((self.H.getfreqs(),n,n_smoothed))   
-        
-        self.calculateinitsunc(self.H.fdData,self.l_opt)
-        
-        return self.n
-  
-    def errorL(self,l,H):
-        #the error function for the length finding minimization
-        
-        #calculate n for the short transfer function H and the length l
-        n_small=[self.calculaten(H,l)]
-        #evaluate the quasi space value
-        qs=self.QuasiSpace(n_small,H[1,0]-H[0,0],l)
-        #evaluate the total variation value
-        tv=self.totalVariation(n_small)
-        #plot them
-        plt.plot(l,qs[0],'+')
-        plt.plot(l,tv[0],'*')        
-        print("Currently evaluating length: "+ str(l[0]*1e6) + " TV Value " + str(tv[0]))
-        return qs[0]
+def doCalculation(tdref,tdsam,measuredthickness=0,fmin=200e9,fmax=2e12,frequencyResolution=0
+                ,bool_findl=1,n_SVMAFS=5,bool_silent=0):
     
+    '''This function calculates the optical constants and the thickness of a sample
+    pass the preprocessed reference and sample data and a thickness for starting the algorithm
+    Select the range for calculating the 
+    '''
 
-    def findLintelli(self):
-        #find the frequency with the most amplitude
-        fmax=self.H.fdref.getmaxfreq()
-        
-        #overthink once more the cropping length
-        n=self.n_estimated
-        #oscillation period can be calculated from H data!
-        f_span=c/2*1/self.l_estimated*1/n #(this should be the length of the oscillation)
-        #restrict H to only 5 oscillations
-        H_small=self.H.getcroppedData(self.H.fdData,fmax-f_span*1,fmax+f_span*4)
-        plt.figure(33)
-        #minimize quasispace/totalvariation value
-        t=minimize(self.errorL,self.userthickness,args=((np.asarray(H_small),)),\
-        method='Nelder-Mead', options={'xtol':1e-6,'disp': False})#, 'disp': False})
-        return t.x[0]
+    
+    #H=H.getCroppedData(150e9,2e12)
 
-    def getHFirstPuls(self):
-        #returns the transferfunction of the timedomain data that corresponds to the first
-        #pulse only
-        origlen=self.tdref.getSamplingPoints()
-        refdata=self.tdref.getFirstPuls(10e-12)
-        samdata=self.tdsam.getFirstPuls(5e-12)
-        #bring it to the old length
-        refdata=refdata.zeroPaddData(origlen-refdata.getSamplingPoints())
-        samdata=samdata.zeroPaddData(origlen-samdata.getSamplingPoints())
-        #calculate the fouriertransform
-        firstref=TD.FrequencyDomainData.fromTimeDomainData(refdata)
-        firstsam=TD.FrequencyDomainData.fromTimeDomainData(samdata)
-        
-        #calculate the transferfunction for the first puls
-        H_firstPuls=TD.FrequencyDomainData.divideTwoSpectra(firstsam,firstref)
-        
-        return H_firstPuls
+    #H.plotme()
+    #plotInits(H,l)
+    
+    #calculaten(H,l,noEchos)
+    
+    
+    #if l_opt shouldn't be calculated used bool_findl=False
+    #if bool_findl:
+     #   l_opt=findLintelli()
 
-    def getFilenameSuggestion(self):
-        #tries to give a valid filename from the sample filenames
-        filenames=self.tdsam.getDataSetName()
-        av=filenames.split(',')
-        if len(av)>1:
-            sug='Average'+os.path.splitext(av[1])[0]
-        else:
-            sug=os.path.splitext(av[0])[0]
-       
-        return sug
+    #print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(l_opt*1e6) + ' micro m ' + '\033[0m')
 
+    #noEchos=getNumberofEchos()
+    #calculate n for the given l_opt
+    #n=calculaten(H,l_opt)
+    #n_smoothed=n
+    #i=0
+    
+    #smooth it with SVMAF
+    #while i<n_SVMAFS:
+    #    n_smoothed=self.SVMAF(self.H.getfreqs(),n_smoothed,self.l_opt)
+    #    i+=1
 
+    #self.n=np.column_stack((self.H.getfreqs(),n,n_smoothed))   
+    
+    #self.calculateinitsunc(self.H.fdData,self.l_opt)
+    
+    return n
 
+def findLintelli(H,fmax,echos,n_init,l_init):
+    
+    #oscillation period can be calculated from H data!
+    f_span=c/2*1/l_init*1/n_init #(this should be the length of the oscillation)
+    #restrict H to only 5 oscillations
+    H_small=H.getCroppedData(fmax-f_span*1,fmax+f_span*4)
+    plt.figure(33)
+    #minimize quasispace/totalvariation value
+    t=minimize(errorL,l_init,args=((H_small,echos,)),\
+    method='Nelder-Mead', options={'xtol':1e-6,'disp': False})#, 'disp': False})
+    return t.x[0]
 
-
-    def QuasiSpace(self,ns,df,ls):
-        #evaluates the quasi space value
-        allqs=[]
-        #at the moment, the most easy method(everything else failed...)
-        #get the mean absolute value of the complete spectrum. works best
-        for i in range(len(ns)):
+def errorL(l,H,echos):
+    #the error function for the length finding minimization
+    
+    #calculate n for the short transfer function H and the length l
+    n_small=[calculaten(H,l,echos)]
+    #evaluate the quasi space value
+    qs=quasiSpace(n_small,H.getfbins(),l)
+    #evaluate the total variation value
+    tv=totalVariation(n_small)
+    #plot them
+    plt.plot(l,qs[0],'+')
+    plt.plot(l,tv[0],'*')        
+    print("Currently evaluating length: "+ str(l[0]*1e6) + " TV Value " + str(tv[0]))
+    return tv[0]
+    
+def quasiSpace(ns,df,ls):
+    #evaluates the quasi space value
+    allqs=[]
+    #at the moment, the most easy method(everything else failed...)
+    #get the mean absolute value of the complete spectrum. works best
+    for i in range(len(ns)):
 #            xvalues=py.fftfreq(len(ns[i]),df)*c/4
 
-            QSr=np.fft(ns[i].real-np.mean(ns[i].real))
-            QSi=np.fft(ns[i].imag-np.mean(ns[i].real))
-            #naive cut:
-            ix=range(3,int(len(QSr)/2-1))
+        QSr=np.fft.fft(ns[i].real-np.mean(ns[i].real))
+        QSi=np.fft.fft(ns[i].imag-np.mean(ns[i].real))
+        #naive cut:
+        ix=list(range(3,int(len(QSr)/2-1)))
+    
+        QSr=QSr[ix]
+        QSi=QSi[ix]
+        allqs.append(np.mean(abs(QSr))+np.mean(abs(QSi)))
+    
+    return allqs
+    
+def totalVariation(ns):
+    #calculate the total variation value
+    allvs=[]
+    
+    for i in range(len(ns)):
+        tv1=0            
+        for dm in range(1,len(ns[i])):
+            tv1+=abs(ns[i][dm-1].real-ns[i][dm].real)+\
+            abs(ns[i][dm-1].imag-ns[i][dm].imag)
         
-            QSr=QSr[ix]
-            QSi=QSi[ix]
-            allqs.append(np.mean(abs(QSr))+np.mean(abs(QSi)))
+        allvs.append(tv1)
         
-        return allqs
+    return allvs
+
+def getHFirstPuls(tdRef,tdSam):
+    #returns the transferfunction of the timedomain data that corresponds to the first
+    #pulse only
+    origlen=tdRef.getSamplingPoints()
+    tdRef=tdRef.getFirstPuls(10e-12)
+    tdSam=tdSam.getFirstPuls(5e-12)
+    #bring it to the old length
+    tdRef=tdRef.zeroPaddData(origlen-tdRef.getSamplingPoints())
+    tdSam=tdSam.zeroPaddData(origlen-tdSam.getSamplingPoints())
+    #calculate the fouriertransform
+    firstref=TD.FrequencyDomainData.fromTimeDomainData(tdRef)
+    firstsam=TD.FrequencyDomainData.fromTimeDomainData(tdSam)
+    
+    #calculate the transferfunction for the first puls
+    H_firstPuls=TD.FrequencyDomainData.divideTwoSpectra(firstsam,firstref)
+    
+    return H_firstPuls
+
+def getFilenameSuggestion(tdSam):
+    #tries to give a valid filename from the sample filenames
+    filenames=tdSam.getDataSetName()
+    av=filenames.split(',')
+    if len(av)>1:
+        sug='Average'+os.path.splitext(av[1])[0]
+    else:
+        sug=os.path.splitext(av[0])[0]
+   
+    return sug
 
 
-    def setOutfilename(self,newname):
-        #outfilename
-        self.outfilename=newname
 
-    def SVMAF(self,freq,n,l):
-        #Apply the SVMAF filter to the material parameters
-        runningMean=lambda x,N: np.hstack((x[:N-1],np.convolve(x,np.ones((N,))/N,mode='same')[N-1:-N+1],x[(-N+1):]))
-        #calculate the moving average of 3 points
-        n_smoothed=runningMean(n,3)
-        #evaluate H_smoothed from n_smoothed
-        H_smoothed=self.H_theory(freq,[n_smoothed.real,n_smoothed.imag],l)
-        
-        H_r=H_smoothed.real
-        H_i=H_smoothed.imag
-        f=1
-        #the uncertainty margins
-        lb_r=self.H.getFReal()-self.H.getFRealUnc()*f
-        lb_i=self.H.getFImag()-self.H.getFImagUnc()*f
-        ub_r=self.H.getFReal()+self.H.getFRealUnc()*f
-        ub_i=self.H.getFImag()+self.H.getFImagUnc()*f
-        
-        #ix=all indices for which after smoothening n H is still inbetwen the bounds        
-        ix=np.all([H_r>=lb_r,H_r<ub_r,H_i>=lb_i,H_i<ub_i],axis=0)
+def SVMAF(self,freq,n,l):
+    #Apply the SVMAF filter to the material parameters
+    runningMean=lambda x,N: np.hstack((x[:N-1],np.convolve(x,np.ones((N,))/N,mode='same')[N-1:-N+1],x[(-N+1):]))
+    #calculate the moving average of 3 points
+    n_smoothed=runningMean(n,3)
+    #evaluate H_smoothed from n_smoothed
+    H_smoothed=self.H_theory(freq,[n_smoothed.real,n_smoothed.imag],l)
+    
+    H_r=H_smoothed.real
+    H_i=H_smoothed.imag
+    f=1
+    #the uncertainty margins
+    lb_r=self.H.getFReal()-self.H.getFRealUnc()*f
+    lb_i=self.H.getFImag()-self.H.getFImagUnc()*f
+    ub_r=self.H.getFReal()+self.H.getFRealUnc()*f
+    ub_i=self.H.getFImag()+self.H.getFImagUnc()*f
+    
+    #ix=all indices for which after smoothening n H is still inbetwen the bounds        
+    ix=np.all([H_r>=lb_r,H_r<ub_r,H_i>=lb_i,H_i<ub_i],axis=0)
 #        #dont have a goood idea at the moment, so manually:
-        for i in range(len(n_smoothed)):
-            if ix[i]==0:
-                n_smoothed[i]=n[i]
-        print("SVMAF changed the refractive index at " + str(sum(ix)) + " frequencies")
-        return n_smoothed      
+    for i in range(len(n_smoothed)):
+        if ix[i]==0:
+            n_smoothed[i]=n[i]
+    print("SVMAF changed the refractive index at " + str(sum(ix)) + " frequencies")
+    return n_smoothed      
 
-    def totalVariation(self,ns):
-        #calculate the total variation value
-        allvs=[]
+
+
+def saveResults(filename):
+    #save the results to a file        
+    H_theory=self.H_theory(self.H.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
+    #built the variable that should be saved:        
+    savetofile=np.column_stack((
+    self.H.getfreqs(), #frequencies
+    self.n[:,1].real,-self.n[:,1].imag, #the real and imaginary part of n
+    self.n[:,2].real,-self.n[:,2].imag, #the real and imaginary part of the smoothed n
+    self.H.getFReal(),self.H.getFImag(),#H_measured
+    self.H.getFRealUnc(),self.H.getFImagUnc(),#uncertainties
+    self.H.getFAbs(),self.H.getFPh(),#absH,ph H measured    
+    H_theory.real,H_theory.imag, #theoretic H
+    ))
+
+    headerstr=('freq, ' 
+    'ref_ind_real, ref_ind_imag, '
+    'ref_ind_sreal, ref_ind_simag, '
+    'H_measured_real, H_measured_imag, '
+    'Hunc_real, Hunc_imag, '
+    'abs(H_measured), angle(H_measured), '
+    'H_theory_real, H_theory_imag')
+    if filename==None:
+        fname=self.getFilenameSuggestion()
+    else:
+        fname=filename+"_"
+    fname+='analyzed_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
+    np.savetxt(fname,savetofile,delimiter=',',header=headerstr)
+    
+    # Save in a separate file the results of the simplified calculation of n, k, alpha end epsilon along with their unc
+    headerstr=('freq, ' 
+    'ref_ind_real, ref_ind_imag, '
+    'u(ref_ind_real), u(ref_ind_imag), '
+    'std(l)_n, std(Esam)_n, std(Eref)_n, f(Theta)_n, f(k<<<)_n, f(FP)_n, f(n0)_n, '
+    'std(l)_k, std(Esam)_k, std(Eref)_k, f(Theta)_k, f(k<<<)_k, f(FP)_k, f(n0)_k, '
+    'Epsilon_1, Epsilon_2, '
+    'u(Epsilon_1), u(Epsilon_2), '
+    'alpha, u(alpha), alpha_max, ')
+    
+    if filename==None:
+        fname=self.getFilenameSuggestion()
+    else:
+        fname=filename+"_"
         
-        for i in range(len(ns)):
-            tv1=0            
-            for dm in range(1,len(ns[i])):
-                tv1+=abs(ns[i][dm-1].real-ns[i][dm].real)+\
-                abs(ns[i][dm-1].imag-ns[i][dm].imag)
-            
-            allvs.append(tv1)
-            
-        return allvs
+    fname+='SimplifiedAnalysis_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
+    np.savetxt(fname,self.n_with_unc,delimiter=',',header=headerstr)
 
-    def saveResults(self,filename=None):
-        #save the results to a file        
-        H_theory=self.H_theory(self.H.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
-        #built the variable that should be saved:        
-        savetofile=np.column_stack((
-        self.H.getfreqs(), #frequencies
-        self.n[:,1].real,-self.n[:,1].imag, #the real and imaginary part of n
-        self.n[:,2].real,-self.n[:,2].imag, #the real and imaginary part of the smoothed n
-        self.H.getFReal(),self.H.getFImag(),#H_measured
-        self.H.getFRealUnc(),self.H.getFImagUnc(),#uncertainties
-        self.H.getFAbs(),self.H.getFPh(),#absH,ph H measured    
-        H_theory.real,H_theory.imag, #theoretic H
-        ))
-
-        headerstr=('freq, ' 
-        'ref_ind_real, ref_ind_imag, '
-        'ref_ind_sreal, ref_ind_simag, '
-        'H_measured_real, H_measured_imag, '
-        'Hunc_real, Hunc_imag, '
-        'abs(H_measured), angle(H_measured), '
-        'H_theory_real, H_theory_imag')
-        if filename==None:
-            fname=self.getFilenameSuggestion()
-        else:
-            fname=filename+"_"
-        fname+='analyzed_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
-        np.savetxt(fname,savetofile,delimiter=',',header=headerstr)
-        
-        # Save in a separate file the results of the simplified calculation of n, k, alpha end epsilon along with their unc
-        headerstr=('freq, ' 
-        'ref_ind_real, ref_ind_imag, '
-        'u(ref_ind_real), u(ref_ind_imag), '
-        'std(l)_n, std(Esam)_n, std(Eref)_n, f(Theta)_n, f(k<<<)_n, f(FP)_n, f(n0)_n, '
-        'std(l)_k, std(Esam)_k, std(Eref)_k, f(Theta)_k, f(k<<<)_k, f(FP)_k, f(n0)_k, '
-        'Epsilon_1, Epsilon_2, '
-        'u(Epsilon_1), u(Epsilon_2), '
-        'alpha, u(alpha), alpha_max, ')
-        
-        if filename==None:
-            fname=self.getFilenameSuggestion()
-        else:
-            fname=filename+"_"
-            
-        fname+='SimplifiedAnalysis_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
-        np.savetxt(fname,self.n_with_unc,delimiter=',',header=headerstr)
+def plotErrorFunction(self,l,freq):
+    #plots the error function
+    plt.figure()
+    resolution=300
+    ix=np.argmin(abs(freq-self.H.getfreqs()))
+    n_i=np.linspace(0.0,0.05,int(resolution/2))
+    n_r=np.linspace(1,3,resolution)
+    N_R,N_I=plt.meshgrid(n_r,n_i)
+    E_fu=np.zeros((len(n_i),len(n_r)))
+    for i in range(len(n_r)):
+        for k in range(len(n_i)):
+            E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.H.fdData[ix,:3],l)
+#        print(E_fu[:,2])
+    plt.pcolor(N_R,N_I,np.log10(E_fu))
+    plt.colorbar()
 
 
-    def plotRefractiveIndex(self,bool_plotsmoothed=1,savefig=0,filename=None):
+if __name__=='__main__':
+    
+    fns=glob.glob('*ref*.txt')
+    tdRef=TD.importMarburgData(fns)
+    fns=glob.glob('*_2_*.txt')
+    tdSam=TD.importMarburgData(fns)
+    
+    tdRef=tdRef.getWindowedData(5e-12)
+    tdSam=tdSam.getWindowedData(5e-12)
+    
+  #  doCalculation(ref,sam)
+   
+    fmin=300e9
+    fmax=2e12
+    
+    bool_findl=True
+    
+    #resolution=5e9
+   
+    fRef=TD.FrequencyDomainData.fromTimeDomainData(tdRef)
+    fSam=TD.FrequencyDomainData.fromTimeDomainData(tdSam)
+    
+    H=TD.FrequencyDomainData.divideTwoSpectra(fSam,fRef)
+    l,n=getThicknessEstimateDavid(H,fmin,fmax)
+    
+    noEchos=getNumberofEchos(tdRef,n,l)
+
+    H_firstpulse=getHFirstPuls(tdRef,tdSam)
+    H_firstpulse=H_firstpulse.getCroppedData(fmin,fmax)
+    H=H.getCroppedData(fmin,fmax)
+    
+    #inits=calculateInits(H_firstpulse,l)
+    #plotInits(H_firstpulse,l)
+    
+    fmax=fRef.getMaxFreq()
+    
+    #if l_opt shouldn't be calculated used bool_findl=False
+    if bool_findl:
+        l_opt=findLintelli(H,fmax,echos,n,l):
+
+    print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(l_opt*1e6) + ' micro m ' + '\033[0m')
+
+    #calculate n for the given l_opt
+    n=calculaten(H,l_opt)
+    #n_smoothed=n
+    #i=0
+    
+    #smooth it with SVMAF
+    #while i<n_SVMAFS:
+    #    n_smoothed=self.SVMAF(self.H.getfreqs(),n_smoothed,self.l_opt)
+    #    i+=1
+
+    #self.n=np.column_stack((self.H.getfreqs(),n,n_smoothed))   
+    
+    #self.calculateinitsunc(self.H.fdData,self.l_opt)    
+    
+    
+   #tera=teralyz(ref,sam)
+    #l,n=tera.getThicknessEstimateDavid()
+    
+    #tera.calculaten(l)
+
+'''    
+   def plotRefractiveIndex(self,bool_plotsmoothed=1,savefig=0,filename=None):
         #plot the refractive index
     
         if filename==None:
@@ -523,52 +553,7 @@ class teralyz():
             figname=figname_b+'Alpha.png'
             plt.savefig(figname,dpi=200)
     
-    def plotErrorFunction(self,l,freq):
-        #plots the error function
-        plt.figure()
-        resolution=300
-        ix=np.argmin(abs(freq-self.H.getfreqs()))
-        n_i=np.linspace(0.0,0.05,int(resolution/2))
-        n_r=np.linspace(1,3,resolution)
-        N_R,N_I=plt.meshgrid(n_r,n_i)
-        E_fu=np.zeros((len(n_i),len(n_r)))
-        for i in range(len(n_r)):
-            for k in range(len(n_i)):
-                E_fu[k,i]=self.error_func([n_r[i],n_i[k]],self.H.fdData[ix,:3],l)
-#        print(E_fu[:,2])
-        plt.pcolor(N_R,N_I,np.log10(E_fu))
-        plt.colorbar()
-
-    def plotInits(self,l,figurenumber=200):
-        #plots the initial conditions
-        inits=self.calculateInits(l)
-        plt.figure(figurenumber)
-        plt.title('Initial Conditions')
-        plt.plot(self.H.getFrequenciesRef()/1e9,inits[0])
-        plt.plot(self.H.getFrequenciesRef()/1e9,-inits[1])
-        plt.xlabel('Frequency in GHz')
-        plt.ylabel('optical constant value')
-        plt.legend(('n_real','n_imag'))
-    
-
-
-
-if __name__=='__main__':
-    
-    fns=glob.glob('*ref*.txt')
-    ref=TD.importMarburgData(fns)
-    fns=glob.glob('*_2_*.txt')
-    sam=TD.importMarburgData(fns)
-    
-    ref=ref.getWindowedData(5e-12)
-    sam=sam.getWindowedData(5e-12)
-    
-    tera=teralyz(ref,sam)
-    l,n=tera.getThicknessEstimateDavid()
-    
-    tera.calculaten(l)
-
-'''    def calculateinitsunc(self,H,l,sigma_L = 1e-6,sigma_Theta = 1,n_exact = 1,filename=None):
+    def calculateinitsunc(self,H,l,sigma_L = 1e-6,sigma_Theta = 1,n_exact = 1,filename=None):
         # Calculates the uncertianty on n and k according to:
         # W. Withayachumnankul, B. M. Fisher, H. Lin, D. Abbott, "Uncertainty in terahertz time-domain spectroscopy measurement", J. Opt. Soc. Am. B., Vol. 25, No. 6, June 2008, pp. 1059-1072
         #

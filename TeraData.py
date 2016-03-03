@@ -3,6 +3,8 @@ import glob
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import scipy.signal as signal
+from scipy.interpolate import UnivariateSpline
+
 from uncertainties import unumpy
 
 
@@ -143,7 +145,7 @@ class TimeDomainData():
             timeDomainDatas=TimeDomainData._bringToCommonTimeAxis(timeDomainDatas)
         
         #datas have same time axis, no interpolation needed
-        print(timeDomainDatas)
+        #print(timeDomainDatas)
         efields=[tdd.getEfield() for tdd in timeDomainDatas]
         av=np.average(efields,axis=0)
         std=np.std(efields,axis=0,ddof=1)/np.sqrt(len(timeDomainDatas))
@@ -316,6 +318,23 @@ class TimeDomainData():
     def getPeakPosition(self):
         '''gives the time, at which the signal is maximal'''
         return self.getTimeAxisRef()[np.argmax(self.getEfield())]
+
+    def getPeakPositionExtrapolated(self,newresolution=0.1e-15):
+        '''Extrapolates the data using splines in order to resolve the peak position better'''
+        peakPosition=self.getPeakPosition()
+        peakWidth=self.getPeakWidth()        
+        if peakWidth>1e-12:
+            peakWidth=1e-12
+
+        mi=peakPosition-0.5*peakWidth
+        ma=peakPosition+0.5*peakWidth
+        reduced=self.getTimeSlice(mi,ma)
+        extrapolator=UnivariateSpline(self.getTimeAxisRef(),self.getEfield(),k=5)
+        x_new=np.arange(mi,ma,newresolution)
+        y_new=extrapolator(x_new)
+        return x_new[np.argmax(y_new)]
+        
+        
 
     def getPeakWidth(self):
         efield=abs(self.getEfield())
@@ -550,6 +569,10 @@ class FrequencyDomainData():
         
     def getPhasesRef(self):
         return self.phase     
+        
+    def getMaxFreq(self):
+        '''returns the Frequency with the highest Power'''
+        return self.getFrequenciesRef()[np.argmax(abs(self.spectrum))]
         
     def getfbins(self):
         #the frequency spacing
