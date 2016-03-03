@@ -43,6 +43,9 @@ def getRefractiveIndexEstimateTimeDomain(tdsam,tdref,thickness):
   
     return n
 
+def getOpticalThickness(tdRref,tdSam):
+
+
 def getNumberofEchos(tdData,n,l):
     '''
     Use l and average n for calculating the maximal number of fabry-pero pulses
@@ -342,6 +345,54 @@ def plotErrorFunction(self,l,freq):
     plt.pcolor(N_R,N_I,np.log10(E_fu))
     plt.colorbar()
 
+class teralyz():
+    '''
+    This class should implement the calculation of the optical constants
+    similar to the Teralyzer Algorithm (i.e. solve in Frequency Domain)
+    '''
+    def __init__(self,reference,sample):
+        '''initialize the solver with at least the reference and sample data
+        of type TimeDomainData'''
+        
+        self.reference=reference
+        self.sample=sample
+
+        self.findl=True
+        self.fmin=200e9
+        self.fmax=1e12
+        self.phaseinterpolation=[200e9,1e12]
+        
+        self.fRef=TD.FrequencyDomainData.fromTimeDomainData(reference)
+        self.fSam=TD.FrequencyDomainData.fromTimeDomainData(sample)
+    
+        self.H=TD.FrequencyDomainData.divideTwoSpectra(fSam,fRef)        
+    
+    def setThickness(self,thickness):
+        self.thickness=thickness
+
+    def setCalculationDomain(self,fmin,fmax):
+        self.fmin=fmin
+        self.fmax=fmax
+
+    def setPhaseInterpolationDomain(self,fmin,fmax):
+        self.phaseinterpolation=[fmin,fmax]
+        self.fRef=self.fRef.removePhaseOffset(fmin,fmax)
+        self.fSam=self.fSam.removePhaseOffset(fmin,fmax)
+        self.H=TD.FrequencyDomainData.divideTwoSpectra(fSam,fRefweiter)
+        
+        
+    def setFindL(self,bool_findl):
+        '''if FindL is enabled the QuasiSpace or TotalVariation method
+        is employed to determine the best thickness, else the guessed or set
+        Thickness will be used'''
+        self.findl=bool_findl
+    
+    def setTransferFunction(self,H):
+        self.H=H
+        
+    def setNumberOfEchos(self,noEchos):
+        self.noEchos=noEchos
+
 
 if __name__=='__main__':
     
@@ -355,32 +406,10 @@ if __name__=='__main__':
     
   #  doCalculation(ref,sam)
    
-    fmin=300e9
-    fmax=2e12
     
-    bool_findl=True
-    
-    #resolution=5e9
-   
-    fRef=TD.FrequencyDomainData.fromTimeDomainData(tdRef)
-    fSam=TD.FrequencyDomainData.fromTimeDomainData(tdSam)
-    
-    H=TD.FrequencyDomainData.divideTwoSpectra(fSam,fRef)
-    l,n=getThicknessEstimateDavid(H,fmin,fmax)
-    
-    noEchos=getNumberofEchos(tdRef,n,l)
-
-    H_firstpulse=getHFirstPuls(tdRef,tdSam)
-    H_firstpulse=H_firstpulse.getCroppedData(fmin,fmax)
-    H=H.getCroppedData(fmin,fmax)
-    
-    #inits=calculateInits(H_firstpulse,l)
-    #plotInits(H_firstpulse,l)
-    
-    fmax=fRef.getMaxFreq()
     
     #if l_opt shouldn't be calculated used bool_findl=False
-    if bool_findl:
+'''    if bool_findl:
         l_opt=findLintelli(H,fmax,echos,n,l):
 
     print('\033[92m\033[1m' + '  Use Sample Thickness: ' + str(l_opt*1e6) + ' micro m ' + '\033[0m')
@@ -404,8 +433,7 @@ if __name__=='__main__':
     #l,n=tera.getThicknessEstimateDavid()
     
     #tera.calculaten(l)
-
-'''    
+   
    def plotRefractiveIndex(self,bool_plotsmoothed=1,savefig=0,filename=None):
         #plot the refractive index
     

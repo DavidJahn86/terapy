@@ -319,22 +319,34 @@ class TimeDomainData():
         '''gives the time, at which the signal is maximal'''
         return self.getTimeAxisRef()[np.argmax(self.getEfield())]
 
+    def getPeakPositionInterpolated(self,newresolution=0.1e-15):
+        '''Interpolates cubic'''
+        peakPosition=self.getPeakPosition()
+        NoSteps=5
+        
+        mi=peakPosition-NoSteps*self.getTimeStep()
+        ma=peakPosition+NoSteps*self.getTimeStep()
+        reduced=self.getTimeSlice(mi,ma)
+        reduced.plotme()
+        
+        interpolater=interp1d(reduced.getTimeAxisRef(),reduced.getEfield(),kind='cubic')
+        x_new=np.arange(mi+newresolution,ma,newresolution)
+        y_new=interpolater(x_new)
+        
+        return x_new[np.argmax(y_new)]
+
     def getPeakPositionExtrapolated(self,newresolution=0.1e-15):
         '''Extrapolates the data using splines in order to resolve the peak position better'''
         peakPosition=self.getPeakPosition()
-        peakWidth=self.getPeakWidth()        
-        if peakWidth>1e-12:
-            peakWidth=1e-12
-
-        mi=peakPosition-0.5*peakWidth
-        ma=peakPosition+0.5*peakWidth
+        NoSteps=5
+        
+        mi=peakPosition-NoSteps*self.getTimeStep()
+        ma=peakPosition+NoSteps*self.getTimeStep()
         reduced=self.getTimeSlice(mi,ma)
-        extrapolator=UnivariateSpline(self.getTimeAxisRef(),self.getEfield(),k=5)
+        extrapolator=UnivariateSpline(reduced.getTimeAxisRef(),reduced.getEfield(),k=5)
         x_new=np.arange(mi,ma,newresolution)
         y_new=extrapolator(x_new)
         return x_new[np.argmax(y_new)]
-        
-        
 
     def getPeakWidth(self):
         efield=abs(self.getEfield())
@@ -807,7 +819,9 @@ class FrequencyDomainData():
 
         
 if __name__=="__main__":
-    tdData=importMarburgData(['20160209_185835__X0.00Y0.00Z0.00_0of5.00.txt'])[0]
+    fns=glob.glob('*_ref_*.txt')
+    tdData=importMarburgData([fns[0]])[0]
+    #tdData=tdData.getWindowedData(5e-12)
     fdData=FrequencyDomainData.fromTimeDomainData(tdData)
     plt.figure(1)
     tdData.plotme()
