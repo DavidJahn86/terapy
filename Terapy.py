@@ -44,7 +44,8 @@ def getRefractiveIndexEstimateTimeDomain(tdsam,tdref,thickness):
     return n
 
 def getOpticalThickness(tdRref,tdSam):
-
+    #l*(n2-n1)=Timedelay of reference and sample *c
+    pass
 
 def getNumberofEchos(tdData,n,l):
     '''
@@ -365,7 +366,7 @@ class teralyz():
         self.fRef=TD.FrequencyDomainData.fromTimeDomainData(reference)
         self.fSam=TD.FrequencyDomainData.fromTimeDomainData(sample)
     
-        self.H=TD.FrequencyDomainData.divideTwoSpectra(fSam,fRef)        
+        self.H=TD.FrequencyDomainData.divideTwoSpectra(self.fSam,self.fRef)        
     
     def setThickness(self,thickness):
         self.thickness=thickness
@@ -378,7 +379,7 @@ class teralyz():
         self.phaseinterpolation=[fmin,fmax]
         self.fRef=self.fRef.removePhaseOffset(fmin,fmax)
         self.fSam=self.fSam.removePhaseOffset(fmin,fmax)
-        self.H=TD.FrequencyDomainData.divideTwoSpectra(fSam,fRefweiter)
+        self.H=TD.FrequencyDomainData.divideTwoSpectra(self.fSam,self.fRef)
         
         
     def setFindL(self,bool_findl):
@@ -393,6 +394,17 @@ class teralyz():
     def setNumberOfEchos(self,noEchos):
         self.noEchos=noEchos
 
+    def plotSpectra(self):
+        self.fRef.plotme()
+        self.fSam.plotme()
+    
+    def plotPhases(self):
+        plt.plot(self.fRef.getFrequenciesRef()/1e12,self.fRef.getPhasesRef())
+        plt.plot(self.fSam.getFrequenciesRef()/1e12,self.fSam.getPhasesRef())        
+        plt.xlim(0,7)
+        plt.xlabel('Frequency (THz)')
+        plt.ylabel('Phase')
+
 
 if __name__=='__main__':
     
@@ -404,8 +416,9 @@ if __name__=='__main__':
     tdRef=tdRef.getWindowedData(5e-12)
     tdSam=tdSam.getWindowedData(5e-12)
     
-  #  doCalculation(ref,sam)
-   
+    myteralyzer=teralyz(tdRef,tdSam)
+    myteralyzer.setPhaseInterpolationDomain(200e9,3e12)
+    myteralyzer.H.plotme()
     
     
     #if l_opt shouldn't be calculated used bool_findl=False

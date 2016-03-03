@@ -327,7 +327,6 @@ class TimeDomainData():
         mi=peakPosition-NoSteps*self.getTimeStep()
         ma=peakPosition+NoSteps*self.getTimeStep()
         reduced=self.getTimeSlice(mi,ma)
-        reduced.plotme()
         
         interpolater=interp1d(reduced.getTimeAxisRef(),reduced.getEfield(),kind='cubic')
         x_new=np.arange(mi+newresolution,ma,newresolution)
@@ -554,12 +553,26 @@ class FrequencyDomainData():
         else:
             self.phase=np.unwrap(np.angle(self.spectrum))
     
-    def plotme(self):
-        plt.plot(self.frequencies/1e12,self.getNormalizedSpectrum())
-        plt.xlim(0,7)
-        plt.ylim(-90,0)
-        plt.xlabel('Frequency (THz)')
-        plt.ylabel('Normalized Power (dB)')
+    def plotme(self,plotstyle=1):
+        if plotstyle==2:
+            plt.subplot(2,1,1)
+            plt.plot(self.frequencies/1e12,self.getNormalizedSpectrum())
+            plt.xlim(0,7)
+            plt.ylim(-90,0)
+            plt.xlabel('Frequency (THz)')
+            plt.ylabel('Normalized Power (dB)')
+            plt.subplot(2,1,2)
+            plt.plot(self.frequencies/1e12,self.getPhasesRef())
+            plt.xlim(0,7)
+            
+            plt.xlabel('Frequency (THz)')
+            plt.ylabel('Phase')
+        else:
+            plt.plot(self.frequencies/1e12,self.getNormalizedSpectrum())
+            plt.xlim(0,7)
+            plt.ylim(-90,0)
+            plt.xlabel('Frequency (THz)')
+            plt.ylabel('Normalized Power (dB)')
         
     def getFrequencies(self):
         return np.copy(self.frequencies)
