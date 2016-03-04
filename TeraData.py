@@ -6,7 +6,7 @@ import scipy.signal as signal
 from scipy.interpolate import UnivariateSpline
 
 from uncertainties import unumpy
-
+import datetime
 
 class TimeDomainData():
     '''A simple data class for Data acquired by a THz-TD Spectrometer
@@ -14,7 +14,7 @@ class TimeDomainData():
         Should implement the correct add
     '''
     
-    def fromFile(filename,fileformat,propagateUncertainty=False):
+    def fromFile(filename,fileformat,propagateUncertainty=False,flipData=False):
         try:
             str2float=lambda val: float(val.decode("utf-8").replace(',','.'))
             #if no Y_col is specified            
@@ -71,9 +71,11 @@ class TimeDomainData():
             efield=efield[::-1]
         
         #if the measurement was taken towards smaller times, Marburg case
-        if np.argmax(efield)>len(efield)/2:
+        #if np.argmax(efield)>len(efield)/2:
+        if flipData:
             #assume now that the data must get flipped, this must become optional
             efield=efield[::-1]
+            
         if propagateUncertainty:
             sigma_BG=TimeDomainData.estimateBGNoise(timeaxis,efield)
         else:
@@ -194,10 +196,7 @@ class TimeDomainData():
         if len(timeDomainDatas)>1:
             peak_pos=[]
             for tdd in timeDomainDatas:
-                time_max=tdd.getPeakPosition()
-                thisPeakData=tdd.getTimeSlice(time_max-0.5e-12,time_max+0.5e-12)
-                thisPeakData=thisPeakData.getInterpolatedTimeDomainData(20*thisPeakData.getSamplingPoints(),thisPeakData.timeaxis[0],thisPeakData.timeaxis[-1],tkind='cubic')
-                peak_pos.append(thisPeakData.getPeakPosition())
+                peak_pos.append(tdd.getPeakPositionInterpolated())
             
             peak_pos=np.asarray(peak_pos)
             print('Peak Position standard deviation: ' + str(np.std(peak_pos*1e15)) + 'fs')
@@ -329,7 +328,8 @@ class TimeDomainData():
         reduced=self.getTimeSlice(mi,ma)
         
         interpolater=interp1d(reduced.getTimeAxisRef(),reduced.getEfield(),kind='cubic')
-        x_new=np.arange(mi+newresolution,ma,newresolution)
+        x_new=np.arange(min(reduced.getTimeAxisRef()),max(reduced.getTimeAxisRef()),newresolution)
+                
         y_new=interpolater(x_new)
         
         return x_new[np.argmax(y_new)]
@@ -378,7 +378,7 @@ class TimeDomainData():
 
     def getTimeSlice(self,tmin,tmax):
         newtaxis=self.getTimeAxis()
-        ix=np.all([newtaxis>=tmin,newtaxis<tmax],axis=0)
+        ix=np.all([newtaxis>=tmin,newtaxis<=tmax],axis=0)
         return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.getDataSetName(),self.uncertaintyEnabled)
 
     def getTimeWindowLength(self):
@@ -486,6 +486,19 @@ def importINRIMData(filenames):
             'skiprows':0}    
     return TimeDomainData.importMultipleFiles(filenames,params)
 
+def getTimeAndDate(filename):
+    '''Assume that filename is of marburg format'''
+    fn=filename.split('/')[-1]
+    year=int(fn[:4])
+    month=int(fn[4:6])
+    day=int(fn[6:8])
+    hour=int(fn[9:11])
+    minute=int(fn[11:13])
+    second=int(fn[13:15])
+    
+    return datetime.datetime(year,month,day,hour,minute,second)
+    
+    
 def outputInformation(tdData,fdData,filename,header=False):
     myfile=open(filename,'a')
     if header==True:
