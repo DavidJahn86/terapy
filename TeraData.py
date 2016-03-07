@@ -248,7 +248,7 @@ class TimeDomainData():
     def __init__(self,timeaxis,efield,uncertainty=None,datasetname='',propagateUncertainty=False):
         
         self.timeaxis=np.copy(timeaxis)
-        if uncertainty==None:
+        if uncertainty is None:
             self.uncertainty=0#TimeDomainData.estimateBGNoise(timeaxis,efield)
         else:
             self.uncertainty=uncertainty
