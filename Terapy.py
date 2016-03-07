@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import TeraData as TD
 import glob
 
-n_0=1.00027-0.0000j
+n_0=1.00027-0.0000j # the refractive index of air
 
 def getThicknessEstimateDavid(H,fmin=200e9,fmax=1e12):
     """
@@ -63,8 +63,22 @@ def getOpticalThickness(tdRref,tdSam):
 
 def getNumberofEchos(tdData,n,l):
     '''
-    Use l and average n for calculating the maximal number of fabry-pero pulses
-    present in the time window'''
+    Use the thickness and the average refractive index for calculating the maximal number of fabry-pero pulses
+    present in the time window
+    
+    Parameters
+    ---------------
+    tdData: TimeDomainData
+        The sample pulse in time domain
+    n: float
+        average refractive index 
+    l: float
+        The thickness of the sample
+    Returns
+    ----------------
+    delta: Integer
+        The number of echo pulses
+    '''
     #time window
     t_max=tdData.getTimeWindowLength()
     delta=0.5*(t_max*c/(n*l))
@@ -73,8 +87,20 @@ def getNumberofEchos(tdData,n,l):
 def calculateInits(H,l):
     '''
     This uses the approximation that imaginary part of n is small, and solves
-    the fresnell equation in this approximation analytically. Fabry-perot reflections are cut
-    take care that the phase has ben offset_removed!
+    the fresnell equation in this approximation analytically. Fabry-perot reflections are ignored
+    take care that the phase offset has been removed!
+    
+    Parameters
+    --------------------
+    H: complex array
+        The transfer function to determine the complex constants from
+    l: float
+        The thickness of the sample
+        
+    Returns
+    --------------------
+    n, alpha: real valued arrays
+        The refractive index n and the absorption alpha    
     '''
     omega=2*np.pi*H.getFrequenciesRef()
     
@@ -148,7 +174,7 @@ def getFilenameSuggestion(tdSam):
 
 
 
-def SVMAF(self,freq,n,l):
+'''def SVMAF(self,freq,n,l):
     #Apply the SVMAF filter to the material parameters
     runningMean=lambda x,N: np.hstack((x[:N-1],np.convolve(x,np.ones((N,))/N,mode='same')[N-1:-N+1],x[(-N+1):]))
     #calculate the moving average of 3 points
@@ -176,7 +202,7 @@ def SVMAF(self,freq,n,l):
 
 
 
-'''def saveResults(filename):
+def saveResults(filename):
     #save the results to a file        
     H_theory=self.H_theory(self.H.getfreqs(),[self.n[:,1].real,self.n[:,1].imag],self.l_opt)        
     #built the variable that should be saved:        
@@ -323,7 +349,7 @@ class teralyz():
         self.findl=True # enables calculation of l
         self.fmin=200e9 # calculation domain minimum
         self.fmax=1e12 # calculation domain maximum
-        self.phaseinterpolation=[200e9,1e12] # phase interpolation from to 
+        self.phaseinterpolation=[self.fmin,self.fmax] # phase interpolation from to 
         self.noEchos=1 # number of echo pulses in time window
         
         self.fRef=TD.FrequencyDomainData.fromTimeDomainData(reference) #reference frequency domain data
@@ -470,6 +496,17 @@ class teralyz():
         self.H=self.H.getCroppedData(self.fmin,self.fmax)     
 
     def setPhaseInterpolationDomain(self,fmin,fmax):
+        '''
+        Phase Offset Removal (due to noise at low frequencies) will pe performed by 
+        fitting the phase of reference and sample data linearly within fmin and fmax
+        
+        Parameters
+        ---------------
+        fmin: float
+            Minimum frequency (Hz) of Phase interpolation domain
+        fmax: float
+            Maximum frequency (Hz) of Phase interpolation domain
+        '''
         self.phaseinterpolation=[fmin,fmax]
         self.fRef=self.fRef.removePhaseOffset(fmin,fmax)
         self.fSam=self.fSam.removePhaseOffset(fmin,fmax)
@@ -477,9 +514,16 @@ class teralyz():
         self.H=newH.getCroppedData(self.fmin,self.fmax)
         
     def setFindL(self,bool_findl):
-        '''if FindL is enabled the QuasiSpace or TotalVariation method
-        is employed to determine the best thickness, else the guessed or set
-        Thickness will be used'''
+        '''
+        if bool_findl is True than the thickness is used as an initial thickness
+        and the sample thickness is determined with one of the length finding algorithms
+        else the thickness will be used without further optimization
+        
+        Parameters
+        ----------------
+        bool_findl: bool
+            The switch for enabling/disabling thickness calculation
+        '''
         self.findl=bool_findl
     
     def setTransferFunction(self,H):
