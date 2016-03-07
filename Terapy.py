@@ -347,8 +347,8 @@ class teralyz():
         self.sample=sample # Sample Time Domain Data
 
         self.findl=True # enables calculation of l
-        self.fmin=200e9 # calculation domain minimum
-        self.fmax=1e12 # calculation domain maximum
+        self.fmin=30e9 # calculation domain minimum
+        self.fmax=9e12 # calculation domain maximum
         self.phaseinterpolation=[self.fmin,self.fmax] # phase interpolation from to 
         self.noEchos=1 # number of echo pulses in time window
         
