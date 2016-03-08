@@ -155,7 +155,7 @@ class TimeDomainData():
         for tdd in timeDomainDatas:
             name+=', ' + tdd.getDataSetName()
         
-        return TimeDomainData(timeaxisarray[0],av,std,name,propagateUncertainty) 
+        return TimeDomainData(timeDomainDatas[0].getTimeAxis(),av,std,name,propagateUncertainty)
             
     def _bringToCommonTimeAxis(timeDomainDatas,force=True):
         #What can happen: 
@@ -310,7 +310,7 @@ class TimeDomainData():
     def getInterpolatedTimeDomainData(self,desiredLength,mint,maxt,tkind='linear'):
         #use cubic interpolation only, if you know, that the data is not too no
         intpdata=interp1d(self.getTimeAxisRef(),np.asarray([self.getEfield(),self.getUncertainty()]),axis=1,kind=tkind)
-        timeaxis=np.linspace(mint,maxt,desiredLength)
+        timeaxis=np.linspace(mint,maxt,desiredLength,endpoint=True)
         longerData=intpdata(timeaxis)
         return TimeDomainData(timeaxis,longerData[0,:],longerData[1,:],self.getDataSetName(),self.uncertaintyEnabled)
 
@@ -328,7 +328,7 @@ class TimeDomainData():
         reduced=self.getTimeSlice(mi,ma)
         
         interpolater=interp1d(reduced.getTimeAxisRef(),reduced.getEfield(),kind='cubic')
-        x_new=np.arange(min(reduced.getTimeAxisRef()),max(reduced.getTimeAxisRef()),newresolution)
+        x_new=np.arange(min(reduced.getTimeAxisRef())+newresolution,max(reduced.getTimeAxisRef())-newresolution,newresolution)
                 
         y_new=interpolater(x_new)
         
