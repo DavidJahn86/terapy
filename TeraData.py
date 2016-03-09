@@ -3,8 +3,10 @@ import glob
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import scipy.signal as signal
-from uncertainties import unumpy
+from scipy.interpolate import UnivariateSpline
 
+from uncertainties import unumpy
+import datetime
 
 class TimeDomainData():
     '''A simple data class for Data acquired by a THz-TD Spectrometer
@@ -12,7 +14,7 @@ class TimeDomainData():
         Should implement the correct add
     '''
     
-    def fromFile(filename,fileformat,propagateUncertainty=False):
+    def fromFile(filename,fileformat,propagateUncertainty=False,flipData=False):
         try:
             str2float=lambda val: float(val.decode("utf-8").replace(',','.'))
             #if no Y_col is specified            
@@ -69,9 +71,11 @@ class TimeDomainData():
             efield=efield[::-1]
         
         #if the measurement was taken towards smaller times, Marburg case
-        if np.argmax(efield)>len(efield)/2:
+        #if np.argmax(efield)>len(efield)/2:
+        if flipData:
             #assume now that the data must get flipped, this must become optional
             efield=efield[::-1]
+            
         if propagateUncertainty:
             sigma_BG=TimeDomainData.estimateBGNoise(timeaxis,efield)
         else:
@@ -121,7 +125,8 @@ class TimeDomainData():
             ix_max=np.argmax(efield)
             ix_min=np.argmin(efield)
             earlier=min(ix_max,ix_min)
-                #take only the first nts part            
+                #take only the first nts part
+            
             endtime=timeaxis[int(earlier/ratio)]
         else:
             endtime=starttime+timePreceedingSignal
@@ -142,6 +147,7 @@ class TimeDomainData():
             timeDomainDatas=TimeDomainData._bringToCommonTimeAxis(timeDomainDatas)
         
         #datas have same time axis, no interpolation needed
+        #print(timeDomainDatas)
         efields=[tdd.getEfield() for tdd in timeDomainDatas]
         av=np.average(efields,axis=0)
         std=np.std(efields,axis=0,ddof=1)/np.sqrt(len(timeDomainDatas))
@@ -149,7 +155,7 @@ class TimeDomainData():
         for tdd in timeDomainDatas:
             name+=', ' + tdd.getDataSetName()
         
-        return TimeDomainData(timeaxisarray[0],av,std,name,propagateUncertainty) 
+        return TimeDomainData(timeDomainDatas[0].getTimeAxis(),av,std,name,propagateUncertainty)
             
     def _bringToCommonTimeAxis(timeDomainDatas,force=True):
         #What can happen: 
@@ -190,10 +196,7 @@ class TimeDomainData():
         if len(timeDomainDatas)>1:
             peak_pos=[]
             for tdd in timeDomainDatas:
-                time_max=tdd.getPeakPosition()
-                thisPeakData=tdd.getTimeSlice(time_max-0.5e-12,time_max+0.5e-12)
-                thisPeakData=thisPeakData.getInterpolatedTimeDomainData(20*thisPeakData.getSamplingPoints(),thisPeakData.timeaxis[0],thisPeakData.timeaxis[-1],tkind='cubic')
-                peak_pos.append(thisPeakData.getPeakPosition())
+                peak_pos.append(tdd.getPeakPositionInterpolated())
             
             peak_pos=np.asarray(peak_pos)
             print('Peak Position standard deviation: ' + str(np.std(peak_pos*1e15)) + 'fs')
@@ -245,8 +248,8 @@ class TimeDomainData():
     def __init__(self,timeaxis,efield,uncertainty=None,datasetname='',propagateUncertainty=False):
         
         self.timeaxis=np.copy(timeaxis)
-        if uncertainty==None:
-            self.uncertainty=TimeDomainData.estimateBGNoise(timeaxis,efield)
+        if uncertainty is None:
+            self.uncertainty=0#TimeDomainData.estimateBGNoise(timeaxis,efield)
         else:
             self.uncertainty=uncertainty
         
@@ -307,13 +310,42 @@ class TimeDomainData():
     def getInterpolatedTimeDomainData(self,desiredLength,mint,maxt,tkind='linear'):
         #use cubic interpolation only, if you know, that the data is not too no
         intpdata=interp1d(self.getTimeAxisRef(),np.asarray([self.getEfield(),self.getUncertainty()]),axis=1,kind=tkind)
-        timeaxis=np.linspace(mint,maxt,desiredLength)
+        timeaxis=np.linspace(mint,maxt,desiredLength,endpoint=True)
         longerData=intpdata(timeaxis)
         return TimeDomainData(timeaxis,longerData[0,:],longerData[1,:],self.getDataSetName(),self.uncertaintyEnabled)
 
     def getPeakPosition(self):
         '''gives the time, at which the signal is maximal'''
         return self.getTimeAxisRef()[np.argmax(self.getEfield())]
+
+    def getPeakPositionInterpolated(self,newresolution=0.1e-15):
+        '''Interpolates cubic'''
+        peakPosition=self.getPeakPosition()
+        NoSteps=5
+        
+        mi=peakPosition-NoSteps*self.getTimeStep()
+        ma=peakPosition+NoSteps*self.getTimeStep()
+        reduced=self.getTimeSlice(mi,ma)
+        
+        interpolater=interp1d(reduced.getTimeAxisRef(),reduced.getEfield(),kind='cubic')
+        x_new=np.arange(min(reduced.getTimeAxisRef())+newresolution,max(reduced.getTimeAxisRef())-newresolution,newresolution)
+                
+        y_new=interpolater(x_new)
+        
+        return x_new[np.argmax(y_new)]
+
+    def getPeakPositionExtrapolated(self,newresolution=0.1e-15):
+        '''Extrapolates the data using splines in order to resolve the peak position better'''
+        peakPosition=self.getPeakPosition()
+        NoSteps=5
+        
+        mi=peakPosition-NoSteps*self.getTimeStep()
+        ma=peakPosition+NoSteps*self.getTimeStep()
+        reduced=self.getTimeSlice(mi,ma)
+        extrapolator=UnivariateSpline(reduced.getTimeAxisRef(),reduced.getEfield(),k=5)
+        x_new=np.arange(mi,ma,newresolution)
+        y_new=extrapolator(x_new)
+        return x_new[np.argmax(y_new)]
 
     def getPeakWidth(self):
         efield=abs(self.getEfield())
@@ -346,7 +378,7 @@ class TimeDomainData():
 
     def getTimeSlice(self,tmin,tmax):
         newtaxis=self.getTimeAxis()
-        ix=np.all([newtaxis>=tmin,newtaxis<tmax],axis=0)
+        ix=np.all([newtaxis>=tmin,newtaxis<=tmax],axis=0)
         return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.getDataSetName(),self.uncertaintyEnabled)
 
     def getTimeWindowLength(self):
@@ -388,7 +420,9 @@ class TimeDomainData():
   
     def plotme(self):
         '''only for testing'''
-        plt.plot(self.getTimeAxisRef(),self.getEfield())
+        plt.plot(self.getTimeAxisRef()*1e12,self.getEfield())
+        plt.xlabel('Time (ps)')
+        plt.ylabel('Amplitude (arb. units)')
         
     def zeroPaddToTargetFrequencyResolution(self,fbins,paddmode='zero',where='end'):
         '''as many zeros are added as need to achieve a frequency resolution of fbins'''
@@ -452,6 +486,19 @@ def importINRIMData(filenames):
             'skiprows':0}    
     return TimeDomainData.importMultipleFiles(filenames,params)
 
+def getTimeAndDate(filename):
+    '''Assume that filename is of marburg format'''
+    fn=filename.split('/')[-1]
+    year=int(fn[:4])
+    month=int(fn[4:6])
+    day=int(fn[6:8])
+    hour=int(fn[9:11])
+    minute=int(fn[11:13])
+    second=int(fn[13:15])
+    
+    return datetime.datetime(year,month,day,hour,minute,second)
+    
+    
 def outputInformation(tdData,fdData,filename,header=False):
     myfile=open(filename,'a')
     if header==True:
@@ -485,12 +532,15 @@ class FrequencyDomainData():
     FMIN=0      #minimal kept frequency
     FMAX=-1     #maximal kept frequency
     
-    def fromTimeDomainData(tdd):
+    def fromTimeDomainData(tdd,freqresolution=0):
         '''creates a FrequencyDomainData object from a timedomaindata
         '''
-        N=tdd.getSamplingPoints()
+        if freqresolution<=0:
+            N=tdd.getSamplingPoints()
+        else:
+            N=int(1/tdd.getTimeStep()/freqresolution)
         frequencies=np.fft.rfftfreq(N,tdd.getTimeStep())
-        spectrum=np.fft.rfft(tdd.getEfield())
+        spectrum=np.fft.rfft(tdd.getEfield(),N)
         phase=np.unwrap(np.angle(spectrum)) #
         return FrequencyDomainData(frequencies,spectrum,phase)
     
@@ -516,10 +566,26 @@ class FrequencyDomainData():
         else:
             self.phase=np.unwrap(np.angle(self.spectrum))
     
-    def plotme(self):
-        plt.plot(self.frequencies/1e12,20*np.log10(abs(self.spectrum)/max(abs(self.spectrum))))
-        plt.xlim(0,7)
-        plt.ylim(-90,0)
+    def plotme(self,plotstyle=1):
+        if plotstyle==2:
+            plt.subplot(2,1,1)
+            plt.plot(self.frequencies/1e12,self.getNormalizedSpectrum())
+            plt.xlim(0,7)
+            plt.ylim(-90,0)
+            plt.xlabel('Frequency (THz)')
+            plt.ylabel('Normalized Power (dB)')
+            plt.subplot(2,1,2)
+            plt.plot(self.frequencies/1e12,self.getPhasesRef())
+            plt.xlim(0,7)
+            
+            plt.xlabel('Frequency (THz)')
+            plt.ylabel('Phase')
+        else:
+            plt.plot(self.frequencies/1e12,self.getNormalizedSpectrum())
+            plt.xlim(0,7)
+            plt.ylim(-90,0)
+            plt.xlabel('Frequency (THz)')
+            plt.ylabel('Normalized Power (dB)')
         
     def getFrequencies(self):
         return np.copy(self.frequencies)
@@ -529,7 +595,10 @@ class FrequencyDomainData():
         
     def getSpectrum(self):
         return np.copy(self.spectrum)
-        
+    
+    def getNormalizedSpectrum(self):
+        return 20*np.log10(abs(self.spectrum)/max(abs(self.spectrum)))
+    
     def getSpectrumRef(self):
         return self.spectrum
         
@@ -538,6 +607,10 @@ class FrequencyDomainData():
         
     def getPhasesRef(self):
         return self.phase     
+        
+    def getMaxFreq(self):
+        '''returns the Frequency with the highest Power'''
+        return self.getFrequenciesRef()[np.argmax(abs(self.spectrum))]
         
     def getfbins(self):
         #the frequency spacing
@@ -645,30 +718,29 @@ class FrequencyDomainData():
         return -20*np.ones((self.getFrequenciesRef().shape))
 
 
-#    def getEtalonSpacing(self):
-#        '''this should return the frequency of the Etalon
-#        '''
-#    
-#        #how to find a stable range!
-#        bw=self.getBandwidth()
-#        rdata=self.getcroppedData(self.fdData,max(bw[0],250e9),min(bw[1],2.1e12))  
-#        
-#        #need to interpolate data!
-#        oldfreqs=rdata[:,0]
-#        intpdata=interp1d(oldfreqs,rdata[:,3],'cubic')
-#        
-#        fnew=py.arange(min(oldfreqs),max(oldfreqs),0.1e9)
-#        absnew=intpdata(fnew)
-#        #find minimia and maxima        
-#        ixmaxima=signal.argrelmax(absnew)[0]
-#        ixminima=signal.argrelmin(absnew)[0]
-#        
-#        fmaxima=py.mean(py.diff(fnew[ixmaxima]))
-#        fminima=py.mean(py.diff(fnew[ixminima]))
-#        #calculate etalon frequencies
-#        df=(fmaxima+fminima)*0.5 #the etalon frequencies
-#        print(str(df/1e9) + " GHz estimated etalon frequency")
-#        return df
+    def getEtalonSpacing(self,fmin=200e9,fmax=1e12):
+        '''this should return the frequency of the Etalon
+        '''
+    
+        #how to find a stable range!
+        rdata=self.getCroppedData(fmin,fmax)  
+        
+        #need to interpolate data!
+        oldfreqs=rdata.getFrequenciesRef()
+        intpdata=interp1d(oldfreqs,abs(rdata.getSpectrumRef()),'cubic')
+        
+        fnew=np.arange(min(oldfreqs),max(oldfreqs),0.1e9)
+        absnew=intpdata(fnew)
+        #find minimia and maxima        
+        ixmaxima=signal.argrelmax(absnew)[0]
+        ixminima=signal.argrelmin(absnew)[0]
+        
+        fmaxima=np.mean(np.diff(fnew[ixmaxima]))
+        fminima=np.mean(np.diff(fnew[ixminima]))
+        #calculate etalon frequencies
+        df=(fmaxima+fminima)*0.5 #the etalon frequencies
+        print(str(df/1e9) + " GHz estimated etalon frequency")
+        return df
 
 
 
@@ -773,7 +845,9 @@ class FrequencyDomainData():
 
         
 if __name__=="__main__":
-    tdData=importMarburgData(['20150706_130003_Reference_0_X0.00Y0.00Z-2400.00_0of3.00.txt'])[0]
+    fns=glob.glob('*_ref_*.txt')
+    tdData=importMarburgData([fns[0]])[0]
+    #tdData=tdData.getWindowedData(5e-12)
     fdData=FrequencyDomainData.fromTimeDomainData(tdData)
     plt.figure(1)
     tdData.plotme()

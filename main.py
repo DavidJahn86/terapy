@@ -92,16 +92,16 @@ class MyWindow(QtGui.QMainWindow):
         self.ChildMenu.addAction(self.removeItemAction)
          
         #for testing:
-        params={'time_factor':1,
-            'time_col':0,
-            'X_col':1,
-            'Y_col':2,
-            'dec_sep':'.',
-            'skiprows':0}
-        files=glob.glob(r'C:\Users\david\Documents\messdaten\Ref*.txt')
-        tdData=TeraData.TimeDomainData.importMultipleFiles(files,params)
-        tdData.setDataSetName('test')
-        x=self.fillTree('test',tdData)          
+     #   params={'time_factor':1,
+      #      'time_col':0,
+       #     'X_col':1,
+        #    'Y_col':2,
+         #   'dec_sep':'.',
+          #  'skiprows':0}
+        #files=glob.glob(r'C:\Users\david\Documents\messdaten\Ref*.txt')
+        #tdData=TeraData.TimeDomainData.importMultipleFiles(files,params)
+        #tdData.setDataSetName('test')
+        #x=self.fillTree('test',tdData)          
          
         self.show()
         
