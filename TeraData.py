@@ -9,9 +9,31 @@ from uncertainties import unumpy
 import datetime
 
 class TimeDomainData():
-    '''A simple data class for Data acquired by a THz-TD Spectrometer
-        Two member variables: TimeAxis (numpy array), Efield (unumpy array)
-        Should implement the correct add
+    '''
+    A Class for representing the measured THz-Time Domain Data. 
+    Often used operations on this data are implemented.
+
+    Params
+    ----------------
+    timeaxis: numpy array
+        The time axis. 
+    efield: numpy array
+        The measured Efield data. (should have same length as timeaxis)
+    uncertainty: numpy array
+        The uncertainty on the efield, Default=None
+    datasetname:
+        Name of the Dataset, Default=''
+    propagateUncertainty:
+        If set to true, all calculations will be performed using the
+        uncertainty package, this will propagate the uncertainty but it will also 
+        make operation with the time domain data slow, Default=False
+    
+    Example
+    ------------------
+    >>>t=np.arange(0,100e-12,30e-15)
+    >>>P=(t-10e-12)*np.exp(-(t-10e-12)**2/0.15e-24)
+    >>>td=TimeDomainData(t,P)
+    >>>td.plotme()
     '''
     
     def fromFile(filename,fileformat,propagateUncertainty=False,flipData=False):
@@ -237,13 +259,26 @@ class TimeDomainData():
         return tempTDDatas
             
     def importMultipleFiles(fns,fileformats,propagateUncertainty=False):
-        datas=[]        
-        for fn in fns:
-            datas.append(TimeDomainData.fromFile(fn,fileformats,propagateUncertainty))
-            
+        datas=[]
+        if isinstance(fns,list):
+            for fn in fns:
+                datas.append(TimeDomainData.fromFile(fn,fileformats,propagateUncertainty))
+        elif isinstance(fns,str):
+            datas.append(TimeDomainData.fromFile(fns,fileformats,propagateUncertainty))
+        else:
+            print('Either a list of filenames or a single filename should be entered')
+            return 0
+           
         av_data=TimeDomainData._preProcessData(datas)
-        
-        return av_data
+        if isinstance(av_data,list):
+            #if no averaging than a list should be returned
+            #in all other cases only the TimeDomainData object!            
+            if len(av_data)>1:
+                return av_data
+            else:
+                return av_data[0]
+        else:
+            return av_data
         
     def __init__(self,timeaxis,efield,uncertainty=None,datasetname='',propagateUncertainty=False):
         
@@ -468,7 +503,7 @@ class TimeDomainData():
                 newefield=np.concatenate(paddvec,self.getEfield())
         return TimeDomainData(timevec,unumpy.nominal_values(newefield),unumpy.std_devs(newefield),self.getDataSetName(),self.uncertaintyEnabled)
 
-def importMarburgData(filenames):       
+def importMarburgData(filenames):
     params={'time_factor':1,
             'time_col':0,
             'X_col':1,
@@ -845,9 +880,9 @@ class FrequencyDomainData():
 
         
 if __name__=="__main__":
-    fns=glob.glob('*_ref_*.txt')
-    tdData=importMarburgData([fns[0]])[0]
-    #tdData=tdData.getWindowedData(5e-12)
+    fns=glob.glob('Reference*.txt')
+    tdData=importMarburgData(fns)
+    tdData=tdData.getWindowedData(5e-12)
     fdData=FrequencyDomainData.fromTimeDomainData(tdData)
     plt.figure(1)
     tdData.plotme()
