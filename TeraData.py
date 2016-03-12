@@ -36,47 +36,53 @@ class TimeDomainData():
     >>>td.plotme()
     '''
     
-    def fromFile(filename,fileformat,propagateUncertainty=False,flipData=False):
+    def fromFile(filename,decimalSeparator='.',dataColumns=[0,1],
+                skipRows=0,timefactor=1,propagateUncertainty=False,flipData=False):
+        '''
+        Loads the file filename with the given format and returns an object of TimeDomainData Type
+        If a YChannel is given the signal is rotated to only one Channel
+        
+        Parameters
+        ---------------
+        filename: string
+            The name of the file to read.
+        decimalSeparator: string
+            The decimalö separator used, typically either . or , (optional)
+        datacolumns: array of ints
+            The column number of the time data, XChannel and optionally YChannel
+        skipRows: int
+            The number of rows to skip
+        timefactor: float
+            The time axis should be in units of (s), else input here the correct factor.
+        propagateUncertainty: bool
+            Switch uncertainty propagation on or off
+        flipData: bool
+            If the pulse arrives from late times (reversed delay line) the data can be flipped
+
+        Returns
+        -------------
+        Time Domain Data object
+        '''
         try:
-            str2float=lambda val: float(val.decode("utf-8").replace(',','.'))
-            #if no Y_col is specified            
-            if 'Y_col' in fileformat:
+            str2float=lambda val: float(val.decode("utf-8").replace(decimalSeparator,'.'))
+            #Import also YChannel, else neglect it
+            if len(dataColumns)>2 and dataColumns[2]>0:
                 #import it right away
-                if fileformat['dec_sep']=='.':
-                    data=np.loadtxt(filename,
-                                usecols=(fileformat['time_col'],
-                                         fileformat['X_col'],
-                                         fileformat['Y_col']),
-                                skiprows=fileformat['skiprows'])
-                                
-                elif fileformat['dec_sep']==',':
-                    #if the decimal separator is , do a replacement
-                    data=np.loadtxt(filename,
-                                converters={fileformat['time_col']:str2float,
-                                            fileformat['X_col']:str2float,
-                                            fileformat['Y_col']:str2float},
-                                usecols=(fileformat['time_col'],
-                                         fileformat['X_col'],
-                                         fileformat['Y_col']),
-                                skiprows=fileformat['skiprows'])
+                data=np.loadtxt(filename,
+                                converters={dataColumns[0]:str2float,
+                                            dataColumns[1]:str2float,
+                                            dataColumns[2]:str2float},
+                                usecols=(dataColumns[0],dataColumns[1],dataColumns[2]),
+                                skiprows=skipRows)
                 timeaxis=data[:,0]
                 efield=TimeDomainData._rotateToXChannel(data[:,1],data[:,2])
             else:
                 #import it right away
-                if fileformat['dec_sep']=='.':
-                    data=np.loadtxt(filename,
-                                usecols=(fileformat['time_col'],
-                                         fileformat['X_col']),
-                                skiprows=fileformat['skiprows'])
-                                
-                elif fileformat['dec_sep']==',':
-                    #if the decimal separator is , do a replacement
-                    data=np.loadtxt(filename,
-                                converters={fileformat['time_col']:str2float,
-                                            fileformat['X_col']:str2float},
-                                usecols=(fileformat['time_col'],
-                                         fileformat['X_col']),
-                                skiprows=fileformat['skiprows'])
+                data=np.loadtxt(filename,
+                                converters={dataColumns[0]:str2float,
+                                            dataColumns[1]:str2float},
+                                usecols=(dataColumns[0],dataColumns[1]),
+                                skiprows=skipRows)
                 timeaxis=data[:,0]
                 efield=data[:,1]
         except IOError:
@@ -84,7 +90,7 @@ class TimeDomainData():
             return 0
             
         #scale the timaaxis
-        timeaxis*=fileformat['time_factor']
+        timeaxis*=timefactor
         
         #if the measurement was taken in negative time direction, flip the data
         #INRIM Mode
@@ -105,8 +111,21 @@ class TimeDomainData():
         return TimeDomainData(timeaxis,efield,sigma_BG,filename,propagateUncertainty)
     
     def _rotateToXChannel(XChannel,YChannel):
-        #this function should remove all signal from Y-Channel
-        #determine the phase difference from X and Y channel (at maximum signal)
+        '''Removes all signal from Y-Channel, determines the phase difference from X and Y channel (at maximum signal)
+            (discussion: Should for different times different thetas be allowed?)
+        
+            Parameters
+            --------------
+            XChannel: array
+                The Xchannel raw data.
+            YChannel: array
+                The YChannel raw data.
+            
+            Returns
+            ----------------
+            XChannelNew: array
+                The rotated data, YChannel should be empty now
+        '''
         
         ix_max=np.argmax(XChannel)
         #take 9 datapoints to evaluate theta
@@ -121,6 +140,19 @@ class TimeDomainData():
         return XC_new 
     
     def fromFrequencyDomainData(fdata):
+        '''
+        Uses a FrequencyDomainData object to calculate the TimeDomainData
+        via inverse Fourier-Transform
+        
+        Parameter
+        ----------
+        fdata: FrequencyDomainData
+            The FrequencyDomainData object from which the timeDomain signal should be calculated
+        
+        Returns
+        --------------
+        The corresponding TimeDomainData Object.
+        '''
         #if no negative frequency components are present (standard case, generate the correct data length)
         timetrace=np.fft.irfft(fdata.getSpectrumRef())
         timeaxis=np.fft.rfftfreq(len(timetrace)*2-1,fdata.getfbins()/2)
@@ -129,8 +161,22 @@ class TimeDomainData():
         return TimeDomainData(timeaxis,timetrace)
         
     def estimateBGNoise(timeaxis,efield,timePreceedingSignal=-1):
-        '''returns the standard deviation of the Background Noise
-           estimates that on basis of signal preceeding the pulse
+        '''
+        Estimate of the Background Noise
+
+        Parameter
+        -----------
+        timeaxis: array
+            The timeaxis of the timeDomain signal
+        efield: array
+            The time domain trace efield
+        timePreceedingSignal: float
+            The time until which the signal is considered to be noise
+            (optional), if not given: half of the signal before the pulse is used
+
+        Returns
+        ----------
+        The standard deviation of the Background Noise
         '''
         #we should crop the data at least 2.5 ps before the main peak
         nearestdistancetopeak=2.5e-12
@@ -162,56 +208,82 @@ class TimeDomainData():
         return std_BGNoise
     
     def averageTimeDomainDatas(timeDomainDatas,propagateUncertainty=False):
-        timeaxisarray=[tdd.getTimeAxisRef() for tdd in timeDomainDatas]
-        samelength=all(tdd.getSamplingPoints()==timeDomainDatas[0].getSamplingPoints() for tdd in timeDomainDatas)
-        if not samelength or not np.all((timeaxisarray-timeaxisarray[0])==0):
-            print("Time axis manipulation neccessary")
-            timeDomainDatas=TimeDomainData._bringToCommonTimeAxis(timeDomainDatas)
+        '''
+        Averages the list of TimeDomainData Objects. If the time axis of the 
+        elements in timeDomainDatas is not equal the timeDomainDatas will be interpolated 
+        to a common time axis.
         
-        #datas have same time axis, no interpolation needed
-        #print(timeDomainDatas)
+        Parameters
+        ------------
+        timeDomainDatas: list
+            A list of timeDomainData objects
+        propagateUncertainty: bool
+            Switch to turn on the uncertainty propagation, default False
+        
+        Returns
+        -------------
+        TimeDomainData Object
+        '''
+        #in case of different data length the time axis will be interpolated
+        timeDomainDatas=TimeDomainData._bringToCommonTimeAxis(timeDomainDatas)
+        
         efields=[tdd.getEfield() for tdd in timeDomainDatas]
         av=np.average(efields,axis=0)
         std=np.std(efields,axis=0,ddof=1)/np.sqrt(len(timeDomainDatas))
-        name='average_'
+        name='average'
         for tdd in timeDomainDatas:
-            name+=', ' + tdd.getDataSetName()
+            name+='_' + tdd.getDataSetName()
         
         return TimeDomainData(timeDomainDatas[0].getTimeAxis(),av,std,name,propagateUncertainty) 
             
     def _bringToCommonTimeAxis(timeDomainDatas,force=True):
-        #What can happen: 
-        #a) datalengthes are not equal due to missing datapoints 
-        #   => no equal frequency bins
-        #b) time positions might not be equal
+        '''
+        Interpolates the list of timeDomainDatas to a common time axis. The new time axis is from the smallest 
+        common to the largest common time value. 
+        
+        Parameter
+        -------------
+        timeDomainDatas: list
+            A list of timeDomainData objects.
             
-        miss_points_max=1000
-        #check for missing datapoints, allowing 
-        #not more than miss_points_max points to miss 
-        all_lengthes=[]
-        for tdd in timeDomainDatas:
-            all_lengthes.append(tdd.getSamplingPoints())
-        
-        #do it always, just print a warning, if miss_points_max is exceeded
-        if min(all_lengthes)!=max(all_lengthes):
-            print("Datalength of suceeding measurements not consistent, try to fix")
-            if force==False:
-                return 0
-            if max(all_lengthes)-min(all_lengthes)>miss_points_max:
-                print("Warning: Data seems to be corrupted. \n" +\
-                "The length of acquired data of repeated measurements differs by \n" + \
-                    str(max(all_lengthes)-min(all_lengthes)) + ' datapoints')
-                return 0
-        #interpolation does no harm, even if everything is consistent (no interpolation in this case)
-        commonMin=max([tdd.getTimeAxisRef().min() for tdd in timeDomainDatas])
-        commonMax=min([tdd.getTimeAxisRef().max() for tdd in timeDomainDatas])
-        commonLength=min(all_lengthes)
-        
-        #interpolate the data
-        commonAxisDatas=[]
-        for tdd in timeDomainDatas:
-            commonAxisDatas.append(tdd.getInterpolatedTimeDomainData(commonLength,commonMin,commonMax))
-        return commonAxisDatas
+        Returns
+        ------------
+            A list of timeDomainData objects that have the same time axis.
+        '''
+        dt=timeDomainDatas[0].getTimeStep()
+       
+        timeaxisarray=[tdd.getTimeAxisRef() for tdd in timeDomainDatas]
+        samelength=all(tdd.getSamplingPoints()==timeDomainDatas[0].getSamplingPoints() for tdd in timeDomainDatas)
+        if samelength and np.all((timeaxisarray-timeaxisarray[0])<dt/1000):
+            #no interpolation neeeded
+            return timeDomainDatas
+        else:
+            print("Time axis manipulation neccessary")
+            miss_points_max=10
+            #check for missing datapoints, allowing 
+            #not more than miss_points_max points to miss 
+            all_lengthes=[]
+            for tdd in timeDomainDatas:
+                all_lengthes.append(tdd.getSamplingPoints())
+            
+            #do it always, just print a warning, if miss_points_max is exceeded
+            if min(all_lengthes)!=max(all_lengthes):
+                print("Datalength of suceeding measurements not consistent, try to fix")
+                if max(all_lengthes)-min(all_lengthes)>miss_points_max:
+                    print("Warning: Data seems to be corrupted. \n" +\
+                    "The length of acquired data of repeated measurements differs by \n" + \
+                        str(max(all_lengthes)-min(all_lengthes)) + ' datapoints')
+                    return 0
+            #interpolation does no harm, even if everything is consistent (no interpolation in this case)
+            commonMin=max([tdd.getTimeAxisRef().min() for tdd in timeDomainDatas])
+            commonMax=min([tdd.getTimeAxisRef().max() for tdd in timeDomainDatas])
+            commonLength=min(all_lengthes)
+            
+            #interpolate the data
+            commonAxisDatas=[]
+            for tdd in timeDomainDatas:
+                commonAxisDatas.append(tdd.getInterpolatedTimeDomainData(commonLength,commonMin,commonMax))
+            return commonAxisDatas
         
     def _removeTimeShift(timeDomainDatas):
         '''shifts the maxima of several pulses on top of each other to correct for time jitters'''
@@ -258,13 +330,13 @@ class TimeDomainData():
         
         return tempTDDatas
             
-    def importMultipleFiles(fns,fileformats,propagateUncertainty=False):
+    def importMultipleFiles(fns,params):
         datas=[]
         if isinstance(fns,list):
             for fn in fns:
-                datas.append(TimeDomainData.fromFile(fn,fileformats,propagateUncertainty))
+                datas.append(TimeDomainData.fromFile(fn,**params))
         elif isinstance(fns,str):
-            datas.append(TimeDomainData.fromFile(fns,fileformats,propagateUncertainty))
+            datas.append(TimeDomainData.fromFile(fns,**params))
         else:
             print('Either a list of filenames or a single filename should be entered')
             return 0
@@ -504,12 +576,12 @@ class TimeDomainData():
         return TimeDomainData(timevec,unumpy.nominal_values(newefield),unumpy.std_devs(newefield),self.getDataSetName(),self.uncertaintyEnabled)
 
 def importMarburgData(filenames):
-    params={'time_factor':1,
-            'time_col':0,
-            'X_col':1,
-            'Y_col':2,
-            'dec_sep':',',
-            'skiprows':0}
+    params={'timefactor':1,
+            'dataColumns':[0,1,2],
+            'decimalSeparator':',',
+            'skipRows':0,
+            'propagateUncertainty':False,
+            'flipData':False}
     return TimeDomainData.importMultipleFiles(filenames,params)
 
 def importINRIMData(filenames):
