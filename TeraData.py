@@ -155,7 +155,7 @@ class TimeDomainData():
         for tdd in timeDomainDatas:
             name+=', ' + tdd.getDataSetName()
         
-        return TimeDomainData(timeaxisarray[0],av,std,name,propagateUncertainty) 
+        return TimeDomainData(timeDomainDatas[0].getTimeAxis(),av,std,name,propagateUncertainty) 
             
     def _bringToCommonTimeAxis(timeDomainDatas,force=True):
         #What can happen: 
