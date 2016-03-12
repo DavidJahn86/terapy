@@ -45,14 +45,28 @@ def getThicknessEstimateDavid(H,fmin=200e9,fmax=1e12):
     return [l,n]
 
 def getRefractiveIndexEstimateTimeDomain(tdsam,tdref,thickness):
-    '''This method returns an estimate for the "Time Domain Refractive Index" of the sample
-    it uses the pulse maxima of reference and sample measurement and a thickness for returning
-    an averaged refractive index
+    '''
+    This method returns an estimate for the "Time Domain Refractive Index" of the sample
+    it uses the pulse maxima of reference and sample measurement and a thickness.
+    
+    Parameters
+    -------------
+    tdsam: TimeDomainData
+        The reference time domain data
+    tdref: TimeDomainData
+        The sample time domain data
+    thickness: float
+        The thickness of the sample
+    
+    Returns
+    -------------
+    n: float
+        An averaged refractive index
     '''
 
     #the time delay between sample and reference pulse is used to estimate n
-    tmaxs=tdsam.getPeakPosition()
-    tmaxr=tdref.getPeakPosition()
+    tmaxs=tdsam.getPeakPositionInterpolated()
+    tmaxr=tdref.getPeakPositionInterpolated()
     n=1+c/thickness*abs(tmaxs-tmaxr)
   
     return n
@@ -111,6 +125,19 @@ def calculateInits(H,l):
     return n,alpha
 
 def plotInits(H,l):
+    '''
+    This function plots the initial conditions of the refractive indices. 
+    
+    Parameter
+    ----------------
+    H: complex array
+        The transfer function
+    l: float
+        The thickness of the sample
+    Returns
+    ------------
+    nothing (maybe the axes would be nice)
+    '''
     #plots the initial conditions
     inits=calculateInits(H,l)
     plt.title('Initial Conditions')
@@ -120,8 +147,34 @@ def plotInits(H,l):
     plt.ylabel('optical constant value')
     plt.legend((r'$n_{real}$',r'$n_{imag}$'))
     
-def H_theory(freq,n,l,echos):
-    #calculate the theoretic transfer function, so far only one medium!
+    
+def H_theory(freq,n,l,echos=10):
+    '''
+    This function is used to calculate the theoretic transfer function of the 
+    sample under investigation. Currently it uses fresnels law for normal incidence
+    and calculates the transmitted spectra through a slab of thickness l and with 
+    complex refractive index
+    
+    Hint: If you want to change the model, just overwrite H_theory by setting it to
+    your custom function
+    
+    Parameters
+    --------------------
+    freq: real array
+        The frequencies for which H should be calculated.
+    n: list of length 2
+        n[0]=real part of n, n[1]=imaginary part of n,
+        The refractive index of the sample at the frequencies freq
+    l: float
+        The thickness of the sample
+    echos:
+        The number of echo pulses to be expected in the time window. (Default 10).
+    
+    Returns
+    --------------------
+    H: complex valued array
+        The complex transfer function of the system under investigation    
+    '''
     
     nc=n[0]-1j*n[1]
     r_as=(n_0-nc)/(n_0+nc)
@@ -136,11 +189,20 @@ def H_theory(freq,n,l,echos):
 
 def getHFirstPuls(tdRef,tdSam,fmin=200e9,fmax=2e12):
     '''
-    Calculates the transfer function by cropping only the first pulse in the time domain window
-    this can be used to get better initial conditions for n and kappa
-    tdRef: Reference Time Domain Data
-    tdSam: Sample Time Domain Data
-    fmin,fmax: Phase OffsetRemoval from fmin to fmax
+    Calculates the transfer function by cropping only the first pulse in the 
+    time domain window. If it is possible to separate the main pulse from internal
+    echos, this means, that this transfer function will be better for 
+    calculating the initial conditions from the approximated analytic expressions for
+    n and kappa.
+    
+    Parameters
+    -----------------
+    tdRef: TimeDomainData
+        The reference time domain data
+    tdSam: Time Domain Data
+        The sample time domain data.
+    fmin,fmax: float
+        Phase OffsetRemoval from fmin to fmax (Hz)
     '''
     #returns the transferfunction of the timedomain data that corresponds to the first
     #pulse only
@@ -160,19 +222,6 @@ def getHFirstPuls(tdRef,tdSam,fmin=200e9,fmax=2e12):
     H_firstPuls=TD.FrequencyDomainData.divideTwoSpectra(firstsam,firstref)
     
     return H_firstPuls
-
-def getFilenameSuggestion(tdSam):
-    #tries to give a valid filename from the sample filenames
-    filenames=tdSam.getDataSetName()
-    av=filenames.split(',')
-    if len(av)>1:
-        sug='Average'+os.path.splitext(av[1])[0]
-    else:
-        sug=os.path.splitext(av[0])[0]
-   
-    return sug
-
-
 
 '''def SVMAF(self,freq,n,l):
     #Apply the SVMAF filter to the material parameters
@@ -199,8 +248,6 @@ def getFilenameSuggestion(tdSam):
             n_smoothed[i]=n[i]
     print("SVMAF changed the refractive index at " + str(sum(ix)) + " frequencies")
     return n_smoothed      
-
-
 
 def saveResults(filename):
     #save the results to a file        
@@ -247,7 +294,7 @@ def saveResults(filename):
         
     fname+='SimplifiedAnalysis_' + 'D=' + str(self.l_opt/1e-6) +'.txt'
     np.savetxt(fname,self.n_with_unc,delimiter=',',header=headerstr)
-'''
+
 
 def plotErrorFunction(self,l,freq):
     #plots the error function
@@ -264,6 +311,7 @@ def plotErrorFunction(self,l,freq):
 #        print(E_fu[:,2])
     plt.pcolor(N_R,N_I,np.log10(E_fu))
     plt.colorbar()
+'''
 
 def quasiSpace(ns):
     """
@@ -271,8 +319,12 @@ def quasiSpace(ns):
 
     Parameters:
     ------------
-    ns : complex array
+    ns : list of complex array
         The complex refractive index for each frequency
+    Returns
+    ------------
+    allqs: list
+        A list of quasi space values for the list of complex refractive index arrays
         
     *[1] M. Scheller, C. Jansen, and M. Koch, Optics Communications, Volume 282, Issue 7, 1 April 2009, Pages 1304-1306*
     """
@@ -299,9 +351,14 @@ def totalVariation(ns):
 
     Parameters:
     ------------
-    ns : complex array
+    ns : list of complex array
         The complex refractive index for each frequency
-        
+
+    Returns
+    -------------
+    allvs: list
+        A list of totalVariation values. (One for each entry from ns)
+         
     *[1] I. Pupeza, R. Wilk, and M. Koch, Optics Express, Volume 15, Issue 7, 2 April 2007, Pages 4335-4350*
     """
     
@@ -347,8 +404,8 @@ class teralyz():
         self.sample=sample # Sample Time Domain Data
 
         self.findl=True # enables calculation of l
-        self.fmin=200e9 # calculation domain minimum
-        self.fmax=1e12 # calculation domain maximum
+        self.fmin=30e9 # calculation domain minimum
+        self.fmax=9e12 # calculation domain maximum
         self.phaseinterpolation=[self.fmin,self.fmax] # phase interpolation from to 
         self.noEchos=1 # number of echo pulses in time window
         
@@ -414,13 +471,51 @@ class teralyz():
         #self.n is a 5xlengthf array, frequency,n_real,n_imag,n_smoothed_real,n_smoothed_imag
         return n    
 
-    def doCalculation(self):
-        '''This function calculates the optical constants and the thickness of a sample
-        pass the preprocessed reference and sample data and a thickness for starting the algorithm
-        Select the range for calculating the 
+    def doCalculationInteractively(self):
+        '''This function should guide you through the calculation process with keyboard
+        interaction
         '''
+        self.plotPhases()
+        plt.draw()        
+        ifmin=float(input('Phase interpolation from (GHz): '))
+        ifmax=float(input('Phase interpolation to (GHz): '))
+        self.setPhaseInterpolationDomain(ifmin*1e9,ifmax*1e9)
+        plt.cla()
+        l,n=getThicknessEstimateDavid(myteralyzer.H)
+        print('Teralyz estimated the thickness to be {:2.2f} microns'.format(l*1e6))
+        b=input('Do you want to enter a different thickness (y)/n: ')
+        if b=='y':
+            l=float(input('Insert Thickness of sample (microns): '))
+            l*=1e-6
+        self.setThickness(l)
+        nav=getRefractiveIndexEstimateTimeDomain(self.sample,self.reference,l)
+        echos=getNumberofEchos(self.sample,nav,l)
+        print('Teralyz estimated the number of echos within the time window to be',echos)
+        b=input('Do you want to enter a different number? (y)/n: ')
+        if b=='y':
+            echos=int(input('Number of echos: '))
+        self.setNumberOfEchos(echos)
+        self.plotSpectra()
+        plt.draw()        
+        ifmin=float(input('Calculate n from (GHz): '))
+        ifmax=float(input('Calculate n to (GHz): '))
+        myteralyzer.setCalculationDomain(ifmin*1e9,ifmax*1e9)        
+        plt.close()            
+        b=input('Do you want teralyz to find a better thickness? (y)/n: ')        
+        if b=='y':
+            print('This might take a while....')
+            l=self.determineThickness()
+            print('Best thickness found is {:2.2f} microns'.format(l*1e6))
+            plt.clf()
+            self.plotLminimization('*')            
+            self.setThickness(l)
+        print('Calculating optical constants....')
+        n=self.calculateRefractiveIndex(self.H,self.getThickness())
+        plt.figure(2)
+        plt.plot(self.H.getFrequenciesRef()/1e12,n.real)
+        plt.plot(self.H.getFrequenciesRef()/1e12,n.imag)
+                
         
-        pass
     #H=H.getCroppedData(150e9,2e12)
 
     #H.plotme()
@@ -527,19 +622,23 @@ class teralyz():
         self.findl=bool_findl
     
     def setTransferFunction(self,H):
+        '''change the transfer function, be careful!'''
         self.H=H
         
     def setNumberOfEchos(self,noEchos):
+        '''Set number of echos used in calculation'''
         self.noEchos=noEchos
 
     def plotSpectra(self):
+        '''Plot reference and sample Spectrum'''
         self.fRef.plotme()
         self.fSam.plotme()
     
     def plotPhases(self):
+        '''Plot reference and sample phase'''
         plt.plot(self.fRef.getFrequenciesRef()/1e12,self.fRef.getPhasesRef())
         plt.plot(self.fSam.getFrequenciesRef()/1e12,self.fSam.getPhasesRef())        
-        #plt.xlim(0,200e9)
+        plt.xlim(0,5)
         plt.xlabel('Frequency (THz)')
         plt.ylabel('Phase')
 
@@ -588,19 +687,22 @@ class teralyz():
 
 if __name__=='__main__':
     
-    fns=glob.glob('*ref*.txt')
+    fns=glob.glob('Reference*.txt')
     tdRef=TD.importMarburgData(fns)
-    fns=glob.glob('*_2_*.txt')
+    fns=glob.glob('Sample*.txt')
     tdSam=TD.importMarburgData(fns)
     
     tdRef=tdRef.getWindowedData(5e-12)
     tdSam=tdSam.getWindowedData(5e-12)
     
-    myteralyzer=teralyz(tdRef,tdSam)
-    myteralyzer.setPhaseInterpolationDomain(300e9,3e12)
-    myteralyzer.setNumberOfEchos(7)
-    myteralyzer.setCalculationDomain(300e9,2e12)
-    l,n=getThicknessEstimateDavid(myteralyzer.H)
+    l=TD.TimeDomainData._bringToCommonTimeAxis([tdRef,tdSam])
+    
+    myteralyzer=teralyz(l[0],l[1])
+    myteralyzer.doCalculationInteractively()
+  #  myteralyzer.setPhaseInterpolationDomain(300e9,3e12)
+   # myteralyzer.setNumberOfEchos(7)
+   # myteralyzer.setCalculationDomain(300e9,2e12)
+   # l,n=getThicknessEstimateDavid(myteralyzer.H)
   #  l=myteralyzer.determineThickness()
    # n=myteralyzer.calculateRefractiveIndex(myteralyzer.H,myteralyzer.getThickness())
     #plt.plot(myteralyzer.H.getFrequenciesRef()/1e12,n.real)
