@@ -286,20 +286,29 @@ class TimeDomainData():
             return commonAxisDatas
         
     def _removeTimeShift(timeDomainDatas):
-        '''shifts the maxima of several pulses on top of each other to correct for time jitters'''
+        '''Shifts the maxima of several pulses on top of each other to correct for time jitters
+        
+        Parameter
+        ------------
+        timeDomainDatas: list
+            A list of timeDomainData objects.
+            
+        Returns
+        --------------
+        A list of time-shifted TimeDomainDatas
+        '''
         if len(timeDomainDatas)>1:
             peak_pos=[]
             for tdd in timeDomainDatas:
                 peak_pos.append(tdd.getPeakPositionInterpolated())
             
             peak_pos=np.asarray(peak_pos)
-            print('Peak Position standard deviation: ' + str(np.std(peak_pos*1e15)) + 'fs')
+            print('Peak Position standard deviation: {:2.2f} fs'.format(np.std(peak_pos*1e15)))
             mp=np.mean(peak_pos)
             
             shiftedDatas=[]
             for tdd,peak in zip(timeDomainDatas,peak_pos):
                 newTimeAxis=tdd.getTimeAxis()-(peak-mp)
-                
                 shiftedDatas.append(TimeDomainData(newTimeAxis,tdd.getEfield(),tdd.getUncertainty(),tdd.getDataSetName(),tdd.uncertaintyEnabled))
             
             return shiftedDatas
@@ -307,10 +316,23 @@ class TimeDomainData():
             return timeDomainDatas
             
     def _preProcessData(timeDomainDatas,average=True,removeTimeShift=True,removeDrift=True):
-        '''This function should preprocess the timeDomainData
-        * averages the data if average=True, else returns a list of timeDomainDatas
-        * removes a peak Time Shift, if removeTimeShift=True is set, else no TimeAxis correction
-        * removes constant and linear Drift in measured current if removeDrift=True
+        '''Preprocessing of the list of raw timeDomainDatas
+
+        Parameters
+        ---------------        
+        timeDomainDatas: list
+            A list of timeDomainData Objects
+        average: bool
+            If True the timeDomainData will be averaged
+        removeTimeShift: bool 
+            If true the peak positions of the timeDomainDatas will be shifted
+            on top of each other
+        removeDrift: bool
+            If true a constant and linear drift will be substracted from the Efield.
+        
+        Returns
+        ---------------
+        In all cases a list of preprocessed TimeDomainData objects
         '''
         
         tempTDDatas=timeDomainDatas
@@ -330,18 +352,43 @@ class TimeDomainData():
         
         return tempTDDatas
             
-    def importMultipleFiles(fns,params):
+    def importMultipleFiles(fns,importparams={},preprocessing={}):
+        '''Imports multiple files and does preprocessing
+        
+        Parameters
+        ----------------
+        fns: list
+            The list of filenames to be imported
+        importparams: dictionary
+            (optional) Options to be passed to the fromFile function. Read the listing of fromFile for Details.
+        preprocessing: dictionary
+            (optional) Options to be passed to the _preProcessData function.
+        
+        Returns
+        ----------------
+        A single TimeDomainData Object or if averaging is disabled a list of TimeDomainData Objects.
+        
+        Example
+        ---------------
+        >>>importparams={  'timefactor':1,
+                        'dataColumns':[0,1,2],
+                        'decimalSeparator':',',
+                        'skipRows':0,
+                        'propagateUncertainty':False,
+                        'flipData':False}
+        >>>preprocessing={'average':True,'removeTimeShift':True,'removeDrift':True}
+        '''
         datas=[]
         if isinstance(fns,list):
             for fn in fns:
-                datas.append(TimeDomainData.fromFile(fn,**params))
+                datas.append(TimeDomainData.fromFile(fn,**importparams))
         elif isinstance(fns,str):
-            datas.append(TimeDomainData.fromFile(fns,**params))
+            datas.append(TimeDomainData.fromFile(fns,**importparams))
         else:
             print('Either a list of filenames or a single filename should be entered')
             return 0
            
-        av_data=TimeDomainData._preProcessData(datas)
+        av_data=TimeDomainData._preProcessData(datas,**preprocessing)
         if isinstance(av_data,list):
             #if no averaging than a list should be returned
             #in all other cases only the TimeDomainData object!            
@@ -361,7 +408,6 @@ class TimeDomainData():
             self.uncertainty=uncertainty
         
         if propagateUncertainty:              
-            
             self.efield=unumpy.uarray(efield,self.uncertainty)
         else:
             self.efield=efield
@@ -387,18 +433,22 @@ class TimeDomainData():
             self.uncertaintyEnabled=False
 
     def getDataSetName(self):
+        '''Returns the Name of the Dataset'''
         return self.datasetname
         
     def setDataSetName(self,newname):
+        '''Sets the name of the Dataset'''
         self.datasetname=newname
 
     def getDynamicRange(self):
+        
         #returns the dynamic range
         Emax=max(self.getEfield())
         noise=self.getSigmaBG()
         return Emax/noise
         
     def getEfield(self):
+        '''Returns the EField'''
         return unumpy.nominal_values(self.efield)
 
     def getFirstPuls(self,after=5e-12):
@@ -496,21 +546,31 @@ class TimeDomainData():
     def getUncertainty(self):
         return unumpy.std_devs(self.efield)
     
-    def getWindowedData(self,windowlength_time=-1,windowtype='blackman'):
-        '''windowlength_time sets the time of rising and falling of the window before 1 is reached, a negative time means no flat top
-        windowtype sets the type of window, currently only blackman window available
+    def getWindowedData(self,windowlength_time=5e-12,windowtype='blackman'):
+        '''Applies a window function to the TimeDomainData. 
+        
+        Parameter
+        ---------------
+        windowlength_time: float, default:-1
+            The time (s) of the rising edge of the window. If negative, no flat top is used. Default: 5e-12
+        windowtype: String or tuple
+            Read scipy.signal.get_window for detailed description. All windows listed there can be used.
+            Default: blackman
+            
+        Returns
+        -------------        
+        TimeDomainData Object with windowfunction applied. 
         '''
-        #returns the blackmanwindowed tdData
         if windowlength_time>0:
             #check that N is not too large! needs a fix here
             N=int(windowlength_time/self.getTimeStep())
             if 2*N>self.getSamplingPoints():
-                N=self.getSamplingPoints()/2
+                N=int(self.getSamplingPoints()/2)
                 print("Window too large")
-            w=np.blackman(N*2)
+            w=signal.get_window(windowtype,N*2)
             w=np.hstack((w[:N],np.ones((self.getSamplingPoints()-N*2),),w[N:]))
         else:
-            w=np.blackman(self.getSamplingPoints())
+            w=signal.get_window(windowtype,self.getSamplingPoints())
         
         windowedData=self.getEfield()
         windowedData*=w
@@ -518,35 +578,88 @@ class TimeDomainData():
         return TimeDomainData(self.getTimeAxisRef(),unumpy.nominal_values(windowedData),unumpy.std_devs(windowedData),self.getDataSetName(),self.uncertaintyEnabled)
         
     def _removeLinearDrift(self):
-        '''Removes a linear drift from the measurement data
-        So far no uncertainty propagation ?
+        '''
+        Does a scipy.signal.detrend on the timedomain data. Removes constant and linear drifts.
+        Returns
+        ---------------
+        TimeDomainData Object without drift on Efield
         '''
         newfield=signal.detrend(unumpy.nominal_values(self.efield))
             
         return TimeDomainData(self.getTimeAxisRef(),newfield,self.getUncertainty(),self.getDataSetName(),self.uncertaintyEnabled)
   
-    def plotme(self):
-        '''only for testing'''
-        plt.plot(self.getTimeAxisRef()*1e12,self.getEfield())
-        plt.xlabel('Time (ps)')
-        plt.ylabel('Amplitude (arb. units)')
+    def plotme(self,ax=None,*plotarguments,**plotDict):
+        '''
+        Plots the TimeDomain trace in the axes ax. If no axes are given use current axes.
+
+        Parameter
+        ---------------
+        ax: AxesSubplot
+            The axes to plot into. Set to plt.gca() or None if not needed. 
+        plotarguments: 
+            Additional arguments to be passed to plot
+        plotDict:
+            Additional arguments to be passed to plot
+        Returns
+        --------
+        The used axes object.
+        '''
+        if ax is None:
+            ax=plt.gca()
         
-    def zeroPaddToTargetFrequencyResolution(self,fbins,paddmode='zero',where='end'):
-        '''as many zeros are added as need to achieve a frequency resolution of fbins'''
+        ax.plot(self.getTimeAxisRef()*1e12,self.getEfield(),*plotarguments,**plotDict)
+        ax.set_xlabel('Time (ps)')
+        ax.set_ylabel('Amplitude (arb. units)')
+        
+        return ax        
+        
+    def zeroPaddToTargetFrequencyResolution(self,fbins=5e9,paddmode='zero',where='end'):
+        '''
+        As many zeros are added as need to achieve a frequency resolution of fbins. If
+        this is needed only for FourierTransform than this can be done also in the constructor of
+        FrequencyDomainData.
+        
+        Parameter
+        --------------
+        fbins: float
+            Frequency resolution (Hz) after zeropadding and Fourier Transform.
+        paddmode: string
+            Can be 'zero' (default) or 'gaussian'. Padds zeros or gaussian noise.
+        where: string
+            Can be 'end' (default) or 'start'. Padds the zeros before or after the pulse.
+
+        Returns
+        -----------
+        TimeDomainData Object with new timeaxis         
+        '''
         spac=1/self.getTimeStep()/fbins
         actlen=self.getSamplingPoints()
         nozeros=np.ceil(spac-actlen)
         return self.zeroPaddData(nozeros,paddmode,where)
         
     def zeroPaddData(self,desiredLength,paddmode='zero',where='end'):    
-        '''zero padds the time domain data, it is possible to padd at the beginning,
-        or at the end, and further gaussian or real zero padding is possible        
         '''
+        Adds desiredLength number of zeros to the Efield Data. If this is needed only
+        for FourierTransform than this can be done also in the constructor of FrequencyDomainData.
+        
+        Parameter
+        --------------
+        desiredLength: int
+            Number of zeros to be padded.
+        paddmode: string
+            Can be 'zero' (default) or 'gaussian'. Padds zeros or gaussian noise.
+        where: string
+            Can be 'end' (default) or 'start'. Padds the zeros before or after the pulse.
+
+        Returns
+        -----------
+        TimeDomainData Object with new timeaxis         
+        ''' 
         ##seems not to work for before padding (makes not often sense but yet where is the problem ? needs a fix!)
         desiredLength=int(desiredLength)
         #escape the function        
         if desiredLength<0:
-            return 0
+            return self
 
         #calculate the paddvectors        
         if paddmode=='gaussian':
@@ -566,7 +679,6 @@ class TimeDomainData():
             else:
                 newefield=np.concatenate((self.getEfield(),paddvec))
         else:
-
             newtimes=np.linspace(timevec[0]-(desiredLength+1)*self.getTimeStep(),timevec[0],desiredLength)
             timevec=np.concatenate((newtimes,paddvec))
             if self.uncertaintyEnabled:
