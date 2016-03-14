@@ -254,7 +254,7 @@ class TimeDomainData():
        
         timeaxisarray=[tdd.getTimeAxisRef() for tdd in timeDomainDatas]
         samelength=all(tdd.getSamplingPoints()==timeDomainDatas[0].getSamplingPoints() for tdd in timeDomainDatas)
-        if samelength and np.all((timeaxisarray-timeaxisarray[0])<dt/1000):
+        if samelength and np.all((abs(timeaxisarray-timeaxisarray[0]))<dt/1000):
             #no interpolation neeeded
             return timeDomainDatas
         else:
@@ -767,7 +767,7 @@ class FrequencyDomainData():
         '''Calculate the Transferfunction fdNumerator/fdDenominator
             In our context, most of the time fdNumerator=Sample Spectrum and fdDenominator=ReferenceSpectrum
         '''
-        if not np.all((fdNumerator.getFrequenciesRef()-fdDenominator.getFrequenciesRef())==0):
+        if not np.all((abs(fdNumerator.getFrequenciesRef()-fdDenominator.getFrequenciesRef())<fdNumerator.getfbins()/1000):
             print("Frequency axis of the two inputs are not equal, try to fix")            
             return 0
         
