@@ -767,7 +767,7 @@ class FrequencyDomainData():
         '''Calculate the Transferfunction fdNumerator/fdDenominator
             In our context, most of the time fdNumerator=Sample Spectrum and fdDenominator=ReferenceSpectrum
         '''
-        if not np.all((abs(fdNumerator.getFrequenciesRef()-fdDenominator.getFrequenciesRef())<fdNumerator.getfbins()/1000):
+        if not np.all(abs(fdNumerator.getFrequenciesRef()-fdDenominator.getFrequenciesRef())<fdNumerator.getfbins()/1000):
             print("Frequency axis of the two inputs are not equal, try to fix")            
             return 0
         
