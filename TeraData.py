@@ -278,11 +278,12 @@ class TimeDomainData():
             commonMin=max([tdd.getTimeAxisRef().min() for tdd in timeDomainDatas])
             commonMax=min([tdd.getTimeAxisRef().max() for tdd in timeDomainDatas])
             commonLength=min(all_lengthes)
+            newTimeStep=(commonMax-commonMin)/commonLength
             
             #interpolate the data
             commonAxisDatas=[]
             for tdd in timeDomainDatas:
-                commonAxisDatas.append(tdd.getInterpolatedTimeDomainData(commonLength,commonMin,commonMax))
+                commonAxisDatas.append(tdd.getInterpolatedTimeDomainData(newTimeStep,commonMin,commonMax))
             return commonAxisDatas
         
     def _removeTimeShift(timeDomainDatas):
@@ -452,7 +453,17 @@ class TimeDomainData():
         return unumpy.nominal_values(self.efield)
 
     def getFirstPuls(self,after=5e-12):
-        '''returns only the first pulse'''
+        '''The time domain data is cutted 5ps (default) after the main peak.  
+
+        Parameter
+        -------------
+        after: float
+            The time (s) after the main peak where the pulse should be cropped.
+            
+        Returns
+        -----------
+        TimeDomainData Object with shorter time axis
+        '''
         
         #finds the main peak
         tcenter=self.getPeakPosition()
@@ -464,19 +475,62 @@ class TimeDomainData():
         
         return self.getTimeSlice(tmin,tmax)
 
-    def getInterpolatedTimeDomainData(self,desiredLength,mint,maxt,tkind='linear'):
-        #use cubic interpolation only, if you know, that the data is not too no
-        intpdata=interp1d(self.getTimeAxisRef(),np.asarray([self.getEfield(),self.getUncertainty()]),axis=1,kind=tkind)
-        timeaxis=np.linspace(mint,maxt,desiredLength,endpoint=True)
-        longerData=intpdata(timeaxis)
-        return TimeDomainData(timeaxis,longerData[0,:],longerData[1,:],self.getDataSetName(),self.uncertaintyEnabled)
+    def getInterpolatedTimeDomainData(self,timestep=10e-15,mint=-1,maxt=1,tkind='linear'):
+        '''
+        Interpolates the time domain data to a new timestep. 
+        
+        Parameter
+        ------------
+        timestep: float
+            The new timestep in fs.
+        mint: float
+            The smallest time. The minimum of (mint,old time minimum) is used.
+        maxt: float
+            The largest time. The maximum of (maxt, old time maximum) is used.
+        tkind: string
+            Specifies the kind of interpolation. Check scipy.interp1d for details. Typically either 'linear' or 'cubic'.
+
+        Returns
+        ----------
+        TimeDomainData with Timeaxis from mint to maxt and new timestep.        
+        '''
+        if mint<np.amin(self.getTimeAxisRef()):
+            mint=np.amin(self.getTimeAxisRef())
+        if maxt>np.amax(self.getTimeAxisRef()):
+            maxt=np.amax(self.getTimeAxisRef())
+            
+        timeaxis=np.arange(mint,maxt,timestep)    
+        
+        #take care uncertainty array now has a different length!
+        if self.uncertaintyEnabled:
+            intpdata=interp1d(self.getTimeAxisRef(),np.asarray([self.getEfield(),self.getUncertainty()]),axis=1,kind=tkind)
+            longerData=intpdata(timeaxis)
+            return TimeDomainData(timeaxis,longerData[0,:],longerData[1,:],self.getDataSetName(),self.uncertaintyEnabled)        
+        else:
+            intpdata=interp1d(self.getTimeAxisRef(),self.getEfield(),kind=tkind)
+            longerData=intpdata(timeaxis)
+            return TimeDomainData(timeaxis,longerData,self.getUncertainty(),self.getDataSetName(),self.uncertaintyEnabled)        
 
     def getPeakPosition(self):
-        '''gives the time, at which the signal is maximal'''
+        '''Gives the time, at which the signal is maximal.
+        This method will only return the datapoint where the signal is maximal. The peak resolution
+        can only be in the order of the timestep.
+        
+        Returns
+        ---------
+        TimeStep where Signal is maximal.
+        '''
         return self.getTimeAxisRef()[np.argmax(self.getEfield())]
 
     def getPeakPositionInterpolated(self,newresolution=0.1e-15):
-        '''Interpolates cubic'''
+        '''
+        Returns an interpolated peak Position.
+        
+        Parameter
+        ----------
+        newresolution: float
+            The timestep (s) for the interpolation. (default=0.1fs)
+        '''
         peakPosition=self.getPeakPosition()
         NoSteps=5
         
@@ -492,7 +546,14 @@ class TimeDomainData():
         return x_new[np.argmax(y_new)]
 
     def getPeakPositionExtrapolated(self,newresolution=0.1e-15):
-        '''Extrapolates the data using splines in order to resolve the peak position better'''
+        '''
+        Returns an spline extrapolated peak Position.
+        
+        Parameter
+        ----------
+        newresolution: float
+            The timestep (s) for the interpolation. (default=0.1fs)
+        '''
         peakPosition=self.getPeakPosition()
         NoSteps=5
         
@@ -504,12 +565,28 @@ class TimeDomainData():
         y_new=extrapolator(x_new)
         return x_new[np.argmax(y_new)]
 
-    def getPeakWidth(self):
-        efield=abs(self.getEfield())
+    def getPeakWidth(self,newresolution=0.1e-15):
+        '''Returns the width in s of the peak at half amplitude
+        
+        Parameter
+        ----------
+        newresolution: float 
+            The resolution of the peak interpolation for determining the width.
+            
+        Returns
+        -----------
+        peakWidth in (s).        
+        '''
+        peakPosition=self.getPeakPosition()
+       
+        reduced=self.getInterpolatedTimeDomainData(newresolution,peakPosition-5e-12,peakPosition+5e-12)
+        efield=abs(reduced.getEfield())
         mefield=np.amax(efield)
         #take care, maybe peak resolution not enough... interpolation?
-        m=self.getTimeAxis()[efield>mefield/2]
-        return m[-1]-m[0]
+        m=reduced.getTimeAxis()[efield<mefield/2]
+        #now first occurence to left and right
+        return m[m>peakPosition][0]-m[m<peakPosition][-1]
+        
 
     def getSamplingPoints(self):    
         return self.getTimeAxisRef().shape[0]
@@ -680,11 +757,12 @@ class TimeDomainData():
                 newefield=np.concatenate((self.getEfield(),paddvec))
         else:
             newtimes=np.linspace(timevec[0]-(desiredLength+1)*self.getTimeStep(),timevec[0],desiredLength)
-            timevec=np.concatenate((newtimes,paddvec))
+            timevec=np.concatenate((newtimes,timevec))
             if self.uncertaintyEnabled:
                 newefield=np.concatenate((unumpy.uarray(paddvec,self.getSigmaBG()),self.getEfield()))
             else:
-                newefield=np.concatenate(paddvec,self.getEfield())
+                newefield=np.concatenate((paddvec,self.getEfield()))
+
         return TimeDomainData(timevec,unumpy.nominal_values(newefield),unumpy.std_devs(newefield),self.getDataSetName(),self.uncertaintyEnabled)
 
 def importMarburgData(filenames):
