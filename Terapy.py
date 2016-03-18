@@ -94,7 +94,7 @@ def getNumberofEchos(tdData,n,l):
         The number of echo pulses
     '''
     #time window
-    t_max=tdData.getTimeWindowLength()
+    t_max=tdData.getTimeAfterPulse()
     delta=0.5*(t_max*c/(n*l))
     return int(delta)
   

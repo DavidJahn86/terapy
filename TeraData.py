@@ -47,7 +47,7 @@ class TimeDomainData():
         filename: string
             The name of the file to read.
         decimalSeparator: string
-            The decimalö separator used, typically either . or , (optional)
+            The decimal separator used, typically either . or , (optional)
         datacolumns: array of ints
             The column number of the time data, XChannel and optionally YChannel
         skipRows: int
@@ -588,10 +588,15 @@ class TimeDomainData():
         return m[m>peakPosition][0]-m[m<peakPosition][-1]
         
 
-    def getSamplingPoints(self):    
+    def getSamplingPoints(self):
+        '''Returns the number of measurement points'''
         return self.getTimeAxisRef().shape[0]
   
     def getSigmaBG(self):
+        '''
+        Returns the standard deviation (float) of the Background Noise before the
+        main pulse
+        '''
         return TimeDomainData.estimateBGNoise(self.timeaxis,unumpy.nominal_values(self.efield))
 
     def getSigmaRepeatability(self):
@@ -602,24 +607,61 @@ class TimeDomainData():
         return abs(self.getEfield())/self.getUncertainty()
 
     def getTimeAxis(self):
+        '''
+        Returns a copy of the time axis, needed i.e. for new object creation. 
+        '''
         return np.copy(self.timeaxis)
         
     def getTimeAxisRef(self):
+        '''
+        Returns the time axis as reference. Generally faster and recommended to use in most cases. 
+        '''
         return self.timeaxis
     
     def getTimeStep(self):
-        return self.timeaxis[1]-self.timeaxis[0]
+        '''
+        Returns the TimeStep dt in seconds between two measurement points
+        '''
+        return abs((self.timeaxis[-1]-self.timeaxis[0])/self.getSamplingPoints())
 
     def getTimeSlice(self,tmin,tmax):
+        '''
+        A new timeDomainData object is generated with a time axis from tmin to tmax. The Data is cropped 
+        to this interval.
+        
+        Parameter
+        ---------------
+        tmin: float
+            The time (s) where the new Time Axis should start.
+        tmax: float
+            The time (s) where the new Time Axis should end.
+        
+        Returns
+        ------------
+        TimeDomainData Object with timeaxis from tmin to tmax.
+        '''
+        if tmin>tmax:
+            print('Smaller time is larger than tmax.!, Nothing done.')
+            return self
         newtaxis=self.getTimeAxis()
         ix=np.all([newtaxis>=tmin,newtaxis<=tmax],axis=0)
         return TimeDomainData(newtaxis[ix],self.getEfield()[ix],self.getUncertainty()[ix],self.getDataSetName(),self.uncertaintyEnabled)
 
-    def getTimeWindowLength(self):
-        #returns thetime from the signal peak to the end of the measurement
+    def getTimeAfterPulse(self):
+        '''
+        The time from the Peak of the Pulse to the end 
+        of the measurement interval. (in seconds)        
+        '''
         peak=self.getPeakPosition()
         return abs(self.getTimeAxisRef()[-1]-peak)
-        
+ 
+    def getTimeWindowLength(self):
+        '''
+        The Time Window in seconds.   
+        '''
+        return abs(self.getTimeAxisRef()[-1]-self.getTimeAxisRef()[0])
+ 
+       
     def getUncertainty(self):
         return unumpy.std_devs(self.efield)
     
@@ -765,59 +807,7 @@ class TimeDomainData():
 
         return TimeDomainData(timevec,unumpy.nominal_values(newefield),unumpy.std_devs(newefield),self.getDataSetName(),self.uncertaintyEnabled)
 
-def importMarburgData(filenames):
-    params={'timefactor':1,
-            'dataColumns':[0,1,2],
-            'decimalSeparator':',',
-            'skipRows':0,
-            'propagateUncertainty':False,
-            'flipData':False}
-    return TimeDomainData.importMultipleFiles(filenames,params)
 
-def importINRIMData(filenames):
-    params={'time_factor':1,
-            'time_col':2,
-            'X_col':3,
-            'Y_col':5,
-            'dec_sep':'.',
-            'skiprows':0}    
-    return TimeDomainData.importMultipleFiles(filenames,params)
-
-def getTimeAndDate(filename):
-    '''Assume that filename is of marburg format'''
-    fn=filename.split('/')[-1]
-    year=int(fn[:4])
-    month=int(fn[4:6])
-    day=int(fn[6:8])
-    hour=int(fn[9:11])
-    minute=int(fn[11:13])
-    second=int(fn[13:15])
-    
-    return datetime.datetime(year,month,day,hour,minute,second)
-    
-    
-def outputInformation(tdData,fdData,filename,header=False):
-    myfile=open(filename,'a')
-    if header==True:
-        headerstr='Name; Time Step; Peak Width; Peak Position; Max Efield; '
-        headerstr+='Peak Position; TD SNR; Frequency bins; Bandwidth; FD SNR'
-        myfile.write(headerstr+'\n')
-    writestr=''
-    writestr+=tdData.getDataSetName()+'; '
-    writestr+=str(tdData.getTimeStep())+'; '
-    writestr+=str(tdData.getPeakWidth())+'; '
-    writestr+=str(tdData.getPeakPosition())+'; '
-    writestr+=str(np.amax(abs(tdData.getEfield())))+'; '
-    writestr+=str(tdData.getPeakPosition())+'; '
-    writestr+=str(np.amax(tdData.getSNR())) +'; '
-    writestr+=str(fdData.getfbins()) + '; '
-    writestr+=str(fdData.getBandwidth()) + '; '
-    writestr+=str(np.amax(fdData.getSNR())) + '; '
-    myfile.write(writestr + '\n')
-    myfile.close()
-        
-        
-    
 
 class FrequencyDomainData():
     '''
@@ -1139,7 +1129,58 @@ class FrequencyDomainData():
 #            
 #        #if len(peaks)>2:
 #        #(peakfreqs[1]-peakfreqs[0])
+def importMarburgData(filenames):
+    params={'timefactor':1,
+            'dataColumns':[0,1,2],
+            'decimalSeparator':',',
+            'skipRows':0,
+            'propagateUncertainty':False,
+            'flipData':False}
+    return TimeDomainData.importMultipleFiles(filenames,params)
 
+def importINRIMData(filenames):
+    params={'time_factor':1,
+            'time_col':2,
+            'X_col':3,
+            'Y_col':5,
+            'dec_sep':'.',
+            'skiprows':0}    
+    return TimeDomainData.importMultipleFiles(filenames,params)
+
+def getTimeAndDate(filename):
+    '''Assume that filename is of marburg format'''
+    fn=filename.split('/')[-1]
+    year=int(fn[:4])
+    month=int(fn[4:6])
+    day=int(fn[6:8])
+    hour=int(fn[9:11])
+    minute=int(fn[11:13])
+    second=int(fn[13:15])
+    
+    return datetime.datetime(year,month,day,hour,minute,second)
+    
+    
+def outputInformation(tdData,fdData,filename,header=False):
+    myfile=open(filename,'a')
+    if header==True:
+        headerstr='Name; Time Step; Peak Width; Peak Position; Max Efield; '
+        headerstr+='Peak Position; TD SNR; Frequency bins; Bandwidth; FD SNR'
+        myfile.write(headerstr+'\n')
+    writestr=''
+    writestr+=tdData.getDataSetName()+'; '
+    writestr+=str(tdData.getTimeStep())+'; '
+    writestr+=str(tdData.getPeakWidth())+'; '
+    writestr+=str(tdData.getPeakPosition())+'; '
+    writestr+=str(np.amax(abs(tdData.getEfield())))+'; '
+    writestr+=str(tdData.getPeakPosition())+'; '
+    writestr+=str(np.amax(tdData.getSNR())) +'; '
+    writestr+=str(fdData.getfbins()) + '; '
+    writestr+=str(fdData.getBandwidth()) + '; '
+    writestr+=str(np.amax(fdData.getSNR())) + '; '
+    myfile.write(writestr + '\n')
+    myfile.close()
+        
+       
         
 if __name__=="__main__":
     fns=glob.glob('Reference*.txt')
