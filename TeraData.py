@@ -36,6 +36,9 @@ class TimeDomainData():
     >>>td.plotme()
     '''
     
+    DEBUG = True    
+    
+    
     def fromFile(filename,decimalSeparator='.',dataColumns=[0,1],
                 skipRows=0,timefactor=1,propagateUncertainty=False,flipData=False):
         '''
@@ -63,6 +66,9 @@ class TimeDomainData():
         -------------
         Time Domain Data object
         '''
+        if TimeDomainData.DEBUG:
+            print('Currently loading ' + filename)
+            
         try:
             str2float=lambda val: float(val.decode("utf-8").replace(decimalSeparator,'.'))
             #Import also YChannel, else neglect it
@@ -182,8 +188,9 @@ class TimeDomainData():
         nearestdistancetopeak=2.5e-12
         if min(timeaxis)+timePreceedingSignal>-nearestdistancetopeak:
             timePreceedingSignal=-min(timeaxis)-nearestdistancetopeak
-            print("Time Interval of preceeding noise to long, reset done")
-            #dont use user input if higher than peak
+            if TimeDomainData.DEBUG:
+                print("Time Interval of preceeding noise to long, reset done")
+                #dont use user input if higher than peak
 
         #get the first time
         starttime=min(timeaxis)
@@ -258,7 +265,8 @@ class TimeDomainData():
             #no interpolation neeeded
             return timeDomainDatas
         else:
-            print("Time axis manipulation neccessary")
+            if TimeDomainData.DEBUG:
+                print("Time axis manipulation neccessary")
             miss_points_max=10
             #check for missing datapoints, allowing 
             #not more than miss_points_max points to miss 
@@ -268,11 +276,13 @@ class TimeDomainData():
             
             #do it always, just print a warning, if miss_points_max is exceeded
             if min(all_lengthes)!=max(all_lengthes):
-                print("Datalength of suceeding measurements not consistent, try to fix")
+                if TimeDomainData.DEBUG:
+                    print("Datalength of suceeding measurements not consistent, try to fix")
                 if max(all_lengthes)-min(all_lengthes)>miss_points_max:
-                    print("Warning: Data seems to be corrupted. \n" +\
-                    "The length of acquired data of repeated measurements differs by \n" + \
-                        str(max(all_lengthes)-min(all_lengthes)) + ' datapoints')
+                    if TimeDomainData.DEBUG:
+                        print("Warning: Data seems to be corrupted. \n" +\
+                        "The length of acquired data of repeated measurements differs by \n" + \
+                            str(max(all_lengthes)-min(all_lengthes)) + ' datapoints')
                     return 0
             #interpolation does no harm, even if everything is consistent (no interpolation in this case)
             commonMin=max([tdd.getTimeAxisRef().min() for tdd in timeDomainDatas])
@@ -304,7 +314,8 @@ class TimeDomainData():
                 peak_pos.append(tdd.getPeakPositionInterpolated())
             
             peak_pos=np.asarray(peak_pos)
-            print('Peak Position standard deviation: {:2.2f} fs'.format(np.std(peak_pos*1e15)))
+            if TimeDomainData.DEBUG:
+                print('Peak Position standard deviation: {:2.2f} fs'.format(np.std(peak_pos*1e15)))
             mp=np.mean(peak_pos)
             
             shiftedDatas=[]
@@ -381,6 +392,9 @@ class TimeDomainData():
         '''
         datas=[]
         if isinstance(fns,list):
+            if len(fns)==0:
+                print('No files for import specified!')
+                
             for fn in fns:
                 datas.append(TimeDomainData.fromFile(fn,**importparams))
         elif isinstance(fns,str):
@@ -510,6 +524,29 @@ class TimeDomainData():
             intpdata=interp1d(self.getTimeAxisRef(),self.getEfield(),kind=tkind)
             longerData=intpdata(timeaxis)
             return TimeDomainData(timeaxis,longerData,self.getUncertainty(),self.getDataSetName(),self.uncertaintyEnabled)        
+
+    def getResampledTimeDomainData(self,timestep=10e-15):
+        '''
+        Calculate a resampld TimeDomainDataset using the scipy.signal.resample method
+        This can be better than just interpolation, what about windowing?
+        
+        Parameter
+        ----------------
+        timestep: float
+            The new timestep in (s)
+        
+        Return
+        --------------
+        TimeDomainData object with a to timestep resampled time axis.
+        '''
+        N=int(self.getTimeWindowLength()/timestep)        
+        if N>self.getSamplingPoints():
+            newE,newt=signal.resample(self.getEfield(),N,self.getTimeAxisRef())            
+            return TimeDomainData(newt,newE,self.getUncertainty,self.getDataSetName,self.uncertaintyEnabled)
+        else:
+            if TimeDomainData.DEBUG:
+                print('New Timestep is larger than the timestep of the original Data')
+            return self
 
     def getPeakPosition(self):
         '''Gives the time, at which the signal is maximal.
@@ -641,7 +678,8 @@ class TimeDomainData():
         TimeDomainData Object with timeaxis from tmin to tmax.
         '''
         if tmin>tmax:
-            print('Smaller time is larger than tmax.!, Nothing done.')
+            if TimeDomainData.DEBUG:
+                print('Smaller time is larger than tmax.!, Nothing done.')
             return self
         newtaxis=self.getTimeAxis()
         ix=np.all([newtaxis>=tmin,newtaxis<=tmax],axis=0)
@@ -685,7 +723,8 @@ class TimeDomainData():
             N=int(windowlength_time/self.getTimeStep())
             if 2*N>self.getSamplingPoints():
                 N=int(self.getSamplingPoints()/2)
-                print("Window too large")
+                if TimeDomainData.DEBUG:
+                    print("Window too large")
             w=signal.get_window(windowtype,N*2)
             w=np.hstack((w[:N],np.ones((self.getSamplingPoints()-N*2),),w[N:]))
         else:
@@ -815,9 +854,9 @@ class FrequencyDomainData():
     useful functions on the fft
     * a uncertainty calculation is also carried out
     '''
-    
-    FMIN=0      #minimal kept frequency
-    FMAX=-1     #maximal kept frequency
+    DEBUG = True
+    FMIN = 0      #minimal kept frequency
+    FMAX = -1     #maximal kept frequency
     
     def fromTimeDomainData(tdd,freqresolution=0):
         '''creates a FrequencyDomainData object from a timedomaindata
@@ -836,12 +875,60 @@ class FrequencyDomainData():
             In our context, most of the time fdNumerator=Sample Spectrum and fdDenominator=ReferenceSpectrum
         '''
         if not np.all(abs(fdNumerator.getFrequenciesRef()-fdDenominator.getFrequenciesRef())<fdNumerator.getfbins()/1000):
-            print("Frequency axis of the two inputs are not equal, try to fix")            
-            return 0
+            if FrequencyDomainData.DEBUG:
+                print("Frequency axis of the two inputs are not equal, try to fix")            
+            fdNumerator,fdDenominator=FrequencyDomainData._bringToCommonFrequencyAxis([fdNumerator,fdDenominator])
         
         spectrum=fdNumerator.getSpectrum()/fdDenominator.getSpectrum()
         phase=fdNumerator.getPhases()-fdDenominator.getPhases()
         return FrequencyDomainData(fdNumerator.getFrequencies(),spectrum,phase)
+
+    def _bringToCommonFrequencyAxis(frequencyDomainDatas):
+        '''
+        Interpolates the list of frequencyDomainDatas to a common frequency axis.
+        
+        Parameter
+        -------------
+        frequencyDomainDatas: list
+            A list of frequencyDomainData objects.
+            
+        Returns
+        ------------
+            A list of frequencyDomainData objects that have the same frequency axis.
+        '''
+        
+        if len(frequencyDomainDatas)==0:
+            return []
+          
+        df = frequencyDomainDatas[0].getfbins()
+        N = frequencyDomainDatas[0].getSamplingPoints()
+        
+        frequencyaxisarray=[fdd.getFrequenciesRef() for fdd in frequencyDomainDatas]
+        samelength=all(fdd.getSamplingPoints()==N for fdd in frequencyDomainDatas)
+        if samelength and np.all((abs(frequencyaxisarray-frequencyaxisarray[0]))<df/1000):
+            #no interpolation neeeded
+            return frequencyDomainDatas
+        else:
+            if FrequencyDomainData.DEBUG:
+                print("Frequency axis manipulation neccessary")
+            
+            all_lengthes=[]
+            for fdd in frequencyDomainDatas:
+                all_lengthes.append(fdd.getSamplingPoints())
+            
+            
+            #interpolation does no harm, even if everything is consistent (no interpolation in this case)
+            commonMin=max([fdd.getFrequenciesRef().min() for fdd in frequencyDomainDatas])
+            commonMax=min([fdd.getFrequenciesRef().max() for fdd in frequencyDomainDatas])
+            commonLength=min(all_lengthes)
+            newfrequencyStep=(commonMax-commonMin)/commonLength
+            
+            #interpolate the data
+            commonAxisDatas=[]
+            for fdd in frequencyDomainDatas:
+                commonAxisDatas.append(fdd.getInterpolatedData(newfrequencyStep,commonMin,commonMax))
+            return commonAxisDatas    
+    
     
     def __init__(self,frequencies,spectrum,phase=None):
 
@@ -853,6 +940,8 @@ class FrequencyDomainData():
         else:
             self.phase=np.unwrap(np.angle(self.spectrum))
     
+        
+        
     def plotme(self,plotstyle=1):
         if plotstyle==2:
             plt.subplot(2,1,1)
@@ -939,10 +1028,10 @@ class FrequencyDomainData():
 #       
 #        return py.column_stack((self.fdData[:,:3],absdata,phdata,self.fdData[:,5:]))
 
-    def getInterpolatedFDData(self,newfbins,strmode='linear'):
+    def getInterpolatedData(self,newfbins,minf,maxf,strmode='linear'):
         
         oldfreqs=self.getFrequenciesRef()
-        newfreqs=np.arange(min(oldfreqs),max(oldfreqs),newfbins)
+        newfreqs=np.arange(minf,maxf,newfbins)
                 
         inter=interp1d(oldfreqs,np.asarray([self.getSpectrumRef(),self.getPhasesRef()]),strmode,axis=1)
         
@@ -1026,7 +1115,8 @@ class FrequencyDomainData():
         fminima=np.mean(np.diff(fnew[ixminima]))
         #calculate etalon frequencies
         df=(fmaxima+fminima)*0.5 #the etalon frequencies
-        print(str(df/1e9) + " GHz estimated etalon frequency")
+        if FrequencyDomainData.DEBUG:
+            print(str(df/1e9) + " GHz estimated etalon frequency")
         return df
 
 

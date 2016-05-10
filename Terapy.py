@@ -699,12 +699,12 @@ if __name__=='__main__':
     
     myteralyzer=teralyz(l[0],l[1])
     myteralyzer.doCalculationInteractively()
-  #  myteralyzer.setPhaseInterpolationDomain(300e9,3e12)
-   # myteralyzer.setNumberOfEchos(7)
-   # myteralyzer.setCalculationDomain(300e9,2e12)
-   # l,n=getThicknessEstimateDavid(myteralyzer.H)
-  #  l=myteralyzer.determineThickness()
-   # n=myteralyzer.calculateRefractiveIndex(myteralyzer.H,myteralyzer.getThickness())
+    myteralyzer.setPhaseInterpolationDomain(300e9,3e12)
+    myteralyzer.setNumberOfEchos(7)
+    myteralyzer.setCalculationDomain(300e9,2e12)
+    l,n=getThicknessEstimateDavid(myteralyzer.H)
+    l=myteralyzer.determineThickness()
+    n=myteralyzer.calculateRefractiveIndex(myteralyzer.H,myteralyzer.getThickness())
     #plt.plot(myteralyzer.H.getFrequenciesRef()/1e12,n.real)
     #plt.plot(myteralyzer.H.getFrequenciesRef()/1e12,n.imag)
     
